@@ -3,6 +3,7 @@ import os
 from torch.utils.data import Dataset
 from torchvision.io import read_image
 import re
+from PIL import Image
 
 class ImagesWithSaliency(Dataset):
     def __init__(self, img_folder, fixation_map_folder, heat_map_folder, img_transform=None, hm_transform=None):
@@ -25,14 +26,15 @@ class ImagesWithSaliency(Dataset):
         return len(self.datas)
 
     def __getitem__(self, idx):
-        idx = 0
+        # idx = 0
         img, fix, hm, q  = self.datas[idx]
-        img = read_image(f"{self.img_folder}/{img}")
+        # img = read_image(f"{self.img_folder}/{img}")
+        img = Image.open(f"{self.img_folder}/{img}").convert("RGB")
         fixation = read_image(f"{self.fix_folder}/{fix}")
         hm = read_image(f"{self.heat_map_folder}/{hm}")
         
-        if self.img_transform:
-            img = self.img_transform(img)
+        # if self.img_transform:
+        #     img = self.img_transform(img)
         if self.hm_transform:
             fixation = self.hm_transform(fixation)
             hm = self.hm_transform(hm)
