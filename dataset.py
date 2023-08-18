@@ -6,8 +6,9 @@ import re
 from PIL import Image
 
 class ImagesWithSaliency(Dataset):
-    def __init__(self, img_folder, fixation_map_folder, heat_map_folder, img_transform=None, hm_transform=None):
+    def __init__(self, img_folder, fixation_map_folder, heat_map_folder, img_transform=None, fix_transform=None, hm_transform=None):
         self.img_transform = img_transform
+        self.fix_transform = fix_transform
         self.hm_transform = hm_transform
         self.datas = []
         self.img_folder = img_folder
@@ -33,10 +34,9 @@ class ImagesWithSaliency(Dataset):
         fixation = read_image(f"{self.fix_folder}/{fix}")
         hm = read_image(f"{self.heat_map_folder}/{hm}")
         
-        # if self.img_transform:
-        #     img = self.img_transform(img)
+        if self.fix_transform:
+            fixation = self.fix_transform(fixation)
         if self.hm_transform:
-            fixation = self.hm_transform(fixation)
             hm = self.hm_transform(hm)
         
         return img, q, fixation, hm
