@@ -28,6 +28,8 @@ class SalFormer(torch.nn.Module):
         self.cross_attention = torch.nn.MultiheadAttention(self.feature_dim, 16, kdim=self.feature_dim, vdim=self.feature_dim, batch_first=True)
         self.ln1 = torch.nn.LayerNorm(self.feature_dim)
         self.ln2 = torch.nn.LayerNorm(self.feature_dim)
+        self.ln3 = torch.nn.LayerNorm(self.feature_dim)
+        self.relu1 = torch.nn.ReLU()
 
         self.self_attetion = torch.nn.MultiheadAttention(self.feature_dim, 16, batch_first=True)
         # self.up = torch.nn.Upsample(8*8, mode='linear')
@@ -42,38 +44,38 @@ class SalFormer(torch.nn.Module):
             torch.nn.Conv2d(self.feature_dim, 512, 3),
             torch.nn.BatchNorm2d(512),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Conv2d(512, 512, 3),
             torch.nn.BatchNorm2d(512),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Upsample((16,16), mode='bilinear'),
             torch.nn.Conv2d(512, 256, 3),
             torch.nn.BatchNorm2d(256),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Conv2d(256, 256, 3),
             torch.nn.BatchNorm2d(256),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Upsample((32,32), mode='bilinear'),
             torch.nn.Conv2d(256, 128, 3),
             torch.nn.BatchNorm2d(128),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Conv2d(128, 128, 3),
             torch.nn.BatchNorm2d(128),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Upsample((64,64), mode='bilinear'),
             torch.nn.Conv2d(128, 64, 3),
             torch.nn.BatchNorm2d(64),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Conv2d(64, 64, 3),
             torch.nn.BatchNorm2d(64),
             torch.nn.ReLU(),
-            torch.nn.Dropout(p=0.1),
+            torch.nn.Dropout(p=0.3),
             torch.nn.Upsample((130,130), mode='bilinear'),
             torch.nn.Conv2d(64, 1, 3),
             torch.nn.BatchNorm2d(1),
@@ -108,16 +110,16 @@ class SalFormer(torch.nn.Module):
         img_features =  self.vit.forward(**img, return_dict =True)["last_hidden_state"]
         text_features =  self.bert(**q_inputs)["last_hidden_state"]
         text_features = self.cross_attention.forward(self.text_feature_query.repeat([text_features.shape[0], 1, 1]), text_features, text_features, need_weights=False)[0]
-        # text_features = self.bert_head(text_features)
-    
-        # out = self.cross_attention.forward(text_features, img_features, img_features, need_weights=False)[0]
+        text_features = self.ln1(text_features)
+
         features = torch.concat((img_features, text_features), 1)
         self_att_features = self.self_attetion.forward(features, features, features, need_weights=False)[0]
+        self_att_features = self.ln2(self_att_features)
         features = features + self_att_features
-        features = self.ln1(features)
+        features = self.relu1(features)
+        
         latent_features = self.cross_attention.forward(self.query.repeat([features.shape[0], 1, 1]), features, features, need_weights=False)[0]
-        latent_features = latent_features + self.query.repeat([features.shape[0], 1, 1])
-        latent_features = self.ln2(latent_features)
+        latent_features = self.ln3(latent_features)
 
         latent_features = latent_features.permute(0,2,1)
         out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 8, 8))
