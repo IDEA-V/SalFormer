@@ -114,9 +114,9 @@ class SalFormer(torch.nn.Module):
 
         features = torch.concat((img_features, text_features), 1)
         self_att_features = self.self_attetion.forward(features, features, features, need_weights=False)[0]
-        self_att_features = self.ln2(self_att_features)
         features = features + self_att_features
-        features = self.relu1(features)
+        self_att_features = self.ln2(self_att_features)
+        # features = self.relu1(features)
         
         latent_features = self.cross_attention.forward(self.query.repeat([features.shape[0], 1, 1]), features, features, need_weights=False)[0]
         latent_features = self.ln3(latent_features)

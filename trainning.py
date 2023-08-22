@@ -5,7 +5,7 @@ from torchviz import make_dot
 import torch
 from torchvision import transforms
 from torchvision.utils import save_image
-from transformers import AutoImageProcessor, AutoTokenizer, BertModel, ViTConfig, ViTMAEModel, ViTModel
+from transformers import AutoConfig, AutoImageProcessor, AutoTokenizer, BertModel, ViTConfig, ViTMAEModel, ViTModel
 
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
@@ -40,7 +40,15 @@ train_set, val_set = torch.utils.data.random_split(dataset, [0.9, 0.1])
 
 image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
 # image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
-vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
+
+# vit_config = AutoConfig.from_pretrained("google/vit-base-patch16-224-in21k")
+# vit_config.attention_probs_dropout_prob = 0.1
+# vit_config.hidden_dropout_prob = 0.1
+# vit = ViTModel(vit_config)
+# pretrained = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
+# vit.load_state_dict(pretrained.state_dict())
+
+vit = ViTConfig.from_pretrained("google/vit-base-patch16-224-in21k")
 # vit = ViTMAEModel.from_pretrained("facebook/vit-mae-base")
 
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
