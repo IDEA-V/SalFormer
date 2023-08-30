@@ -35,8 +35,9 @@ hm_transform = transforms.Compose([
     transforms.Lambda(lambda x: x/255)
 ])
 
-dataset = ImagesWithSaliency("./SaliencyChartQA/raw_img/", "./SaliencyChartQA/fix_maps/", "./SaliencyChartQA/heatmaps/",img_transform, fix_transform, hm_transform)
-train_set, val_set = torch.utils.data.random_split(dataset, [0.9, 0.1])
+train_set = ImagesWithSaliency("./SalChartQA/train/raw_img/", "./SalChartQA/train/saliency_all/fix_maps/", "./SalChartQA/train/saliency_all/heatmaps/", fix_transform, hm_transform)
+val_set = ImagesWithSaliency("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", fix_transform, hm_transform)
+test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", fix_transform, hm_transform)
 
 image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
 # image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
@@ -48,15 +49,13 @@ image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-22
 # pretrained = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 # vit.load_state_dict(pretrained.state_dict())
 
-vit = ViTConfig.from_pretrained("google/vit-base-patch16-224-in21k")
+vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 # vit = ViTMAEModel.from_pretrained("facebook/vit-mae-base")
 
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert = BertModel.from_pretrained("bert-base-uncased")
 
-model = SalFormer(vit, bert).to(device)
-
-input = dataset[0][:-1]
+model = SalFormer(vit, bert, dropout_rate=0.2).to(device)
 
 def padding_fn(data):
     img, q, fix, hm = zip(*data)
@@ -73,6 +72,7 @@ normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
 # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+# optimizer = torch.optim.SGD(model.parameters(), lr=0.0001)
 optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
 # for name, param in model.named_parameters():
 #     if param.requires_grad:
@@ -85,7 +85,6 @@ def log_softmax2d(x):
 def softmax2d(x):
     logits = torch.softmax(x.flatten(), 0)
     return logits.reshape(x.shape)
-# bert.eval()
 
 def inference(img, input_ids, fix, hm):
     img = img.convert_to_tensors('pt').to(device)
@@ -125,10 +124,11 @@ for epoch in range(number_epoch):
         optimizer.step()
         optimizer.zero_grad()
         
-        for i in random.sample(range(1, y.shape[0]), 3):
-            save_image(y[i], f'./results/train/epoch{epoch}_batch{batch}_{i}.png')
-            # plt.imsave(f'./results/train/epoch{epoch}_batch{batch}_{i}.png', y[i, 0, :, :].squeeze().detach().cpu().numpy(), vmin=0.0, vmax=1.0, cmap='gray')
-            save_image(hm[i], f'./results/train/epoch{epoch}_batch{batch}_{i}_truth.png')
+        if y.shape[0] == 64:
+            for i in random.sample(range(1, y.shape[0]), 3):
+                save_image(y[i], f'./results/train/epoch{epoch}_batch{batch}_{i}.png')
+                # plt.imsave(f'./results/train/epoch{epoch}_batch{batch}_{i}.png', y[i, 0, :, :].squeeze().detach().cpu().numpy(), vmin=0.0, vmax=1.0, cmap='gray')
+                save_image(hm[i], f'./results/train/epoch{epoch}_batch{batch}_{i}_truth.png')
 
         writer.add_scalar('Loss/train', loss.item(), n_iter)
         writer.add_scalar('Loss/train/kl', kl.item(), n_iter)
