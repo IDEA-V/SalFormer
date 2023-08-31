@@ -4,10 +4,10 @@ from torch.utils.data import Dataset
 from torchvision.io import read_image
 import re
 from PIL import Image
+import json
 
 class ImagesWithSaliency(Dataset):
-    def __init__(self, img_folder, fixation_map_folder, heat_map_folder, img_transform=None, fix_transform=None, hm_transform=None):
-        self.img_transform = img_transform
+    def __init__(self, img_folder, fixation_map_folder, heat_map_folder, fix_transform=None, hm_transform=None):
         self.fix_transform = fix_transform
         self.hm_transform = hm_transform
         self.datas = []
@@ -17,11 +17,13 @@ class ImagesWithSaliency(Dataset):
 
         imgs = os.listdir(img_folder)
         maps = os.listdir(heat_map_folder)
+        qa = json.load(open('./SalChartQA/image_questions.json'))
         for img in imgs:
             id = img.split(".")[0]
-            for heat_map in maps:
-                if heat_map.startswith(id):
-                    self.datas.append([img, heat_map, heat_map, heat_map.replace(f"{id}_", "").replace(".png", "")])
+            q0 = qa[img]['Q0']
+            self.datas.append([img, f"{id}_Q0.png", f"{id}_Q0.png", q0])
+            q1 = qa[img]['Q1']
+            self.datas.append([img, f"{id}_Q1.png", f"{id}_Q1.png", q1])
 
     def __len__(self):
         return len(self.datas)
@@ -40,4 +42,3 @@ class ImagesWithSaliency(Dataset):
             hm = self.hm_transform(hm)
         
         return img, q, fixation, hm
-    

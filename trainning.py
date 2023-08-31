@@ -5,7 +5,7 @@ from torchviz import make_dot
 import torch
 from torchvision import transforms
 from torchvision.utils import save_image
-from transformers import AutoImageProcessor, AutoTokenizer, BertModel, ViTConfig, ViTMAEModel, ViTModel
+from transformers import AutoImageProcessor, AutoTokenizer, BertModel, ViTConfig, ViTMAEModel, ViTModel, SwinModel
 
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
@@ -35,20 +35,22 @@ hm_transform = transforms.Compose([
     transforms.Lambda(lambda x: x/255)
 ])
 
-dataset = ImagesWithSaliency("./SaliencyChartQA/raw_img/", "./SaliencyChartQA/fix_maps/", "./SaliencyChartQA/heatmaps/",img_transform, fix_transform, hm_transform)
-train_set, val_set = torch.utils.data.random_split(dataset, [0.9, 0.1])
+train_set = ImagesWithSaliency("./SalChartQA/train/raw_img/", "./SalChartQA/train/saliency_all/fix_maps/", "./SalChartQA/train/saliency_all/heatmaps/", fix_transform, hm_transform)
+val_set = ImagesWithSaliency("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", fix_transform, hm_transform)
+test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", fix_transform, hm_transform)
 
-image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
+# image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
+image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
+
 # image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
-vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 # vit = ViTMAEModel.from_pretrained("facebook/vit-mae-base")
+# vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
+vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert = BertModel.from_pretrained("bert-base-uncased")
 
 model = SalFormer(vit, bert).to(device)
-
-input = dataset[0][:-1]
 
 def padding_fn(data):
     img, q, fix, hm = zip(*data)
@@ -117,7 +119,7 @@ for epoch in range(number_epoch):
         optimizer.step()
         optimizer.zero_grad()
         
-        for i in random.sample(range(1, y.shape[0]), 3):
+        for i in random.sample(range(1, y.shape[0]), 1):
             save_image(y[i], f'./results/train/epoch{epoch}_batch{batch}_{i}.png')
             # plt.imsave(f'./results/train/epoch{epoch}_batch{batch}_{i}.png', y[i, 0, :, :].squeeze().detach().cpu().numpy(), vmin=0.0, vmax=1.0, cmap='gray')
             save_image(hm[i], f'./results/train/epoch{epoch}_batch{batch}_{i}_truth.png')
