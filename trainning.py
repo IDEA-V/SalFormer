@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from PIL import Image
 from torchviz import make_dot
+import numpy as np
 
 import torch
 from torchvision import transforms
@@ -41,11 +42,13 @@ test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/s
 
 # image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
 image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
-
+# image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-base-patch4-window12-384")
 # image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
 # vit = ViTMAEModel.from_pretrained("facebook/vit-mae-base")
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
+# vit = SwinModel.from_pretrained("microsoft/swin-base-patch4-window12-384")
+
 
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert = BertModel.from_pretrained("bert-base-uncased")
@@ -79,7 +82,15 @@ def log_softmax2d(x):
 def softmax2d(x):
     logits = torch.softmax(x.flatten(), 0)
     return logits.reshape(x.shape)
-# bert.eval()
+
+def nss_npy(gt_locs, predicted_map):
+    assert gt_locs.shape == predicted_map.shape, \
+    'dim missmatch in nss_npy: %s vs %s' % (gt_locs.shape, predicted_map.shape)
+    predicted_map_norm = (predicted_map - np.mean(predicted_map))/np.std(predicted_map)
+    dot = predicted_map_norm * gt_locs
+    N = np.sum(gt_locs)
+    ret = np.sum(dot)/N
+    return ret
 
 def inference(img, input_ids, fix, hm):
     img = img.convert_to_tensors('pt').to(device)
@@ -89,7 +100,7 @@ def inference(img, input_ids, fix, hm):
 
     # if batch == 0:
     #     writer.add_graph(model, [img['pixel_values'], input_ids['input_ids']])
-    y = model(img, input_ids)
+    y = model(img, input_ids) 
     y_sum = y.view(y.shape[0], -1).sum(1, keepdim=True)
     y_distribution = y / (y_sum[:, :, None, None] + eps)
 
@@ -98,12 +109,20 @@ def inference(img, input_ids, fix, hm):
     hm_distribution = hm_distribution + eps
     hm_distribution = hm_distribution / (1+eps)
 
-    nss = torch.sum(normalize(y)*fix)/fix.sum()
+    if fix.sum() != 0:
+        normal_y = (y-y.mean())/y.std()
+        nss = torch.sum(normal_y*fix)/fix.sum()
+    else:
+        nss = torch.Tensor([0.0]).to(device)
     kl = kl_loss(torch.log(y_distribution), torch.log(hm_distribution))
 
     vy = y - torch.mean(y)
-    vhm = hm - torch.mean(hm)
-    cc = torch.sum(vy * vhm) / (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2)))
+    vhm = hm - torch.mean(hm)  
+
+    if (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2))) != 0:
+        cc = torch.sum(vy * vhm) / (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2)))
+    else: 
+        cc = torch.Tensor([0.0]).to(device)
 
     return y, kl, cc, nss
 
@@ -114,6 +133,16 @@ for epoch in range(number_epoch):
 
         y, kl, cc, nss = inference(img, input_ids, fix, hm)
 
+        if torch.isnan(kl):
+            kl = torch.Tensor([0.0]).to(device)
+            print("kl is nan!")
+        if torch.isnan(cc):
+            cc = torch.Tensor([0.0]).to(device)
+            print("cc is nan!")
+        if torch.isnan(nss):
+            nss = torch.Tensor([0.0]).to(device)
+            print("nss is nan!")
+        
         loss = 10*kl - cc - 2*nss
         loss.backward()
         optimizer.step()

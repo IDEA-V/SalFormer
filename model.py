@@ -16,9 +16,14 @@ class SalFormer(torch.nn.Module):
         self.feature_dim = 768
         self.bert = bert
         
-        self.bert_head = torch.nn.Sequential(
+        self.vision_head = torch.nn.Sequential(
             torch.nn.Linear(self.feature_dim, self.feature_dim),
             torch.nn.ReLU(),
+            torch.nn.Linear(self.feature_dim, self.feature_dim),
+            torch.nn.ReLU()
+        )
+
+        self.text_head = torch.nn.Sequential(
             torch.nn.Linear(self.feature_dim, self.feature_dim),
             torch.nn.ReLU(),
             torch.nn.Linear(self.feature_dim, self.feature_dim),
@@ -26,62 +31,21 @@ class SalFormer(torch.nn.Module):
         )
 
         self.cross_attention = torch.nn.MultiheadAttention(self.feature_dim, 16, kdim=self.feature_dim, vdim=self.feature_dim, batch_first=True)
+        self.cross_attention1 = torch.nn.MultiheadAttention(self.feature_dim, 16, kdim=self.feature_dim, vdim=self.feature_dim, batch_first=True)
+
         self.ln1 = torch.nn.LayerNorm(self.feature_dim)
         self.ln2 = torch.nn.LayerNorm(self.feature_dim)
 
         self.self_attetion = torch.nn.MultiheadAttention(self.feature_dim, 16, batch_first=True)
-        # self.up = torch.nn.Upsample(8*8, mode='linear')
 
-        query = torch.randn(8, 8, self.feature_dim).unsqueeze(0)
-        pos_encode2d = PositionalEncoding2D(self.feature_dim)
-        query_2d = pos_encode2d(query)
-        self.query = torch.nn.Parameter(torch.reshape(query_2d, (1, 64, self.feature_dim)))
+        # query = torch.randn(8, 8, self.feature_dim).unsqueeze(0)
+        # pos_encode2d = PositionalEncoding2D(self.feature_dim)
+        # query_2d = pos_encode2d(query)
+        # self.query = torch.nn.Parameter(torch.reshape(query_2d, (1, 64, self.feature_dim)))
         self.text_feature_query = torch.nn.Parameter(torch.randn(51, self.feature_dim).unsqueeze(0)/2)
 
         self.dense1 = torch.nn.Linear(self.feature_dim, self.feature_dim)
         self.relu1 = torch.nn.ReLU()
-
-        # self.decoder = torch.nn.Sequential(
-        #     torch.nn.Conv2d(self.feature_dim, 512, 3),
-        #     torch.nn.BatchNorm2d(512),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Conv2d(512, 512, 3),
-        #     torch.nn.BatchNorm2d(512),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Upsample((16,16), mode='bilinear'),
-        #     torch.nn.Conv2d(512, 256, 3),
-        #     torch.nn.BatchNorm2d(256),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Conv2d(256, 256, 3),
-        #     torch.nn.BatchNorm2d(256),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Upsample((32,32), mode='bilinear'),
-        #     torch.nn.Conv2d(256, 128, 3),
-        #     torch.nn.BatchNorm2d(128),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Conv2d(128, 128, 3),
-        #     torch.nn.BatchNorm2d(128),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Upsample((64,64), mode='bilinear'),
-        #     torch.nn.Conv2d(128, 64, 3),
-        #     torch.nn.BatchNorm2d(64),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Conv2d(64, 64, 3),
-        #     torch.nn.BatchNorm2d(64),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Dropout(p=0.1),
-        #     torch.nn.Upsample((130,130), mode='bilinear'),
-        #     torch.nn.Conv2d(64, 1, 3),
-        #     torch.nn.BatchNorm2d(1),
-        #     torch.nn.Sigmoid(),
-        # )
 
         self.decoder = torch.nn.Sequential(
             torch.nn.Conv2d(self.feature_dim, 512, 3),
@@ -92,7 +56,7 @@ class SalFormer(torch.nn.Module):
             torch.nn.BatchNorm2d(512),
             torch.nn.ReLU(),
             torch.nn.Dropout(p=0.1),
-            torch.nn.Upsample((32,32), mode='bilinear'),
+            torch.nn.Upsample((16,16), mode='bilinear'),
             torch.nn.Conv2d(512, 256, 3),
             torch.nn.BatchNorm2d(256),
             torch.nn.ReLU(),
@@ -101,7 +65,7 @@ class SalFormer(torch.nn.Module):
             torch.nn.BatchNorm2d(256),
             torch.nn.ReLU(),
             torch.nn.Dropout(p=0.1),
-            torch.nn.Upsample((64,64), mode='bilinear'),
+            torch.nn.Upsample((32,32), mode='bilinear'),
             torch.nn.Conv2d(256, 128, 3),
             torch.nn.BatchNorm2d(128),
             torch.nn.ReLU(),
@@ -110,24 +74,22 @@ class SalFormer(torch.nn.Module):
             torch.nn.BatchNorm2d(128),
             torch.nn.ReLU(),
             torch.nn.Dropout(p=0.1),
+            torch.nn.Upsample((64,64), mode='bilinear'),
+            torch.nn.Conv2d(128, 64, 3),
+            torch.nn.BatchNorm2d(64),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.1),
+            torch.nn.Conv2d(64, 64, 3),
+            torch.nn.BatchNorm2d(64),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.1),
             torch.nn.Upsample((130,130), mode='bilinear'),
-            torch.nn.Conv2d(128, 1, 3),
+            torch.nn.Conv2d(64, 1, 3),
             torch.nn.BatchNorm2d(1),
-            torch.nn.Sigmoid()
+            torch.nn.Sigmoid(),
         )
 
         self.train(True)
-
-    #     self.apply(self._init_weights)
-
-    # def _init_weights(self, module):
-    #     if isinstance(module, torch.nn.MultiheadAttention):
-    #         for n, p in module.named_parameters():
-    #             if 'weight' in n:
-    #                 torch.nn.init.normal_(p.data)
-    #     if isinstance(module, torch.nn.Conv2d):
-    #         torch.nn.init.normal_(module.weight)
-    #         print("")
 
     def eval(self):
         super().eval()
@@ -147,20 +109,21 @@ class SalFormer(torch.nn.Module):
         # text_features = self.bert_head(text_features)
     
         # out = self.cross_attention.forward(text_features, img_features, img_features, need_weights=False)[0]
-        features = torch.concat((img_features, text_features), 1)
-        self_att_features = self.self_attetion.forward(features, features, features, need_weights=False)[0]
-        features = features + self_att_features
-        features = self.ln1(features)
+        fused_features = torch.concat((self.vision_head(img_features), self.text_head(text_features)), 1)
+        att_fused_features = self.self_attetion.forward(fused_features, fused_features, fused_features, need_weights=False)[0]
+        fused_features = fused_features + att_fused_features
+        fused_features = self.ln1(fused_features)
 
-        # latent_features = self.cross_attention.forward(self.query.repeat([features.shape[0], 1, 1]), features, features, need_weights=False)[0]
-        # latent_features = latent_features + self.query.repeat([features.shape[0], 1, 1])
-        # latent_features = self.ln2(latent_features)
+        features = self.cross_attention1.forward(img_features, fused_features, fused_features, need_weights=False)[0]
+        features = img_features + features
+        features = self.ln2(features)
+
         features = self.dense1(features)
         latent_features = self.relu1(features)
 
         latent_features = latent_features.permute(0,2,1)
         # out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 8, 8))
-        out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 10, 10))
+        out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 7, 7))
         out = self.decoder(out)
 
         return out
