@@ -9,7 +9,7 @@ from torchvision import transforms
 import numpy as np
 from transformers import AutoImageProcessor
 
-class ImagesWithSaliency(Dataset):
+class ImagesWithSaliency1(Dataset):
     def __init__(self, img_folder, fixation_map_folder, heat_map_folder, img_transforms=None, fix_transform=None, hm_transform=None):
         self.fix_transform = fix_transform
         self.hm_transform = hm_transform
@@ -24,9 +24,7 @@ class ImagesWithSaliency(Dataset):
         for img in imgs:
             id = img.split(".")[0]
             q0 = qa[img]['Q0']
-            self.datas.append([img, f"{id}_Q0.png", f"{id}_Q0.png", q0])
-            q1 = qa[img]['Q1']
-            self.datas.append([img, f"{id}_Q1.png", f"{id}_Q1.png", q1])
+            self.datas.append([img, id, q0])
         
         self.img_transform = img_transforms
 
@@ -35,11 +33,16 @@ class ImagesWithSaliency(Dataset):
 
     def __getitem__(self, idx):
         # idx = 0
-        img, fix, hm, q  = self.datas[idx]
+        img, id, q  = self.datas[idx]
         # img = read_image(f"{self.img_folder}/{img}")
         img = Image.open(f"{self.img_folder}/{img}").convert("RGB")
-        fixation = read_image(f"{self.fix_folder}/{fix}")
-        hm = read_image(f"{self.heat_map_folder}/{hm}")
+        fixation0 = read_image(f"{self.fix_folder}/{id}_Q0.png")
+        fixation1 = read_image(f"{self.fix_folder}/{id}_Q1.png")
+        fixation = torch.where(fixation1>0, fixation1, fixation0)
+        hm0 = read_image(f"{self.heat_map_folder}/{id}_Q0.png").float()
+        hm1 = read_image(f"{self.heat_map_folder}/{id}_Q1.png").float()
+        hm = hm0+hm1
+        hm /= hm.max()
         
         if self.img_transform:
             img = self.img_transform(img)
@@ -48,7 +51,7 @@ class ImagesWithSaliency(Dataset):
         if self.hm_transform:
             hm = self.hm_transform(hm)
         
-        return img, q, fixation, hm, fix
+        return img, q, fixation, hm, img
 
     def get_resized_imgs(self):
         imgs = []

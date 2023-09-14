@@ -19,7 +19,6 @@ from dataset1 import ImagesWithSaliency1
 
 # from model_vit import SalFormer
 # from model_swin import SalFormer
-# from model_swin_pure import SalFormer
 from model_wo_cross_attn import SalFormer
 
 # from model_vision import SalFormer
@@ -43,7 +42,7 @@ layout = {
 writer.add_custom_scalars(layout)
 
 device = 'cuda'
-number_epoch = 500
+number_epoch = 600
 eps=1e-10
 batch_size = 32
 
@@ -112,8 +111,8 @@ normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
 # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
-# optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
+# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
 
 # for name, param in model.named_parameters():
 #     if param.requires_grad:
@@ -161,9 +160,15 @@ def inference(img, input_ids, fix, hm):
 
     return y, kl, cc, nss
 
+checkpoint = torch.load('./model.tar')
+model.load_state_dict(checkpoint['model_state_dict'])
+optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+epoch = checkpoint['epoch']
+loss = checkpoint['loss']
+
 n_iter = 0
 n_test_iter = 0
-for epoch in range(number_epoch):
+for epoch in range(epoch+1, number_epoch):
     for batch, (img, input_ids, fix, hm) in enumerate(train_dataloader):
 
         y, kl, cc, nss = inference(img, input_ids, fix, hm)
