@@ -1,21 +1,15 @@
 import random
 random.seed(666)
 
-import matplotlib.pyplot as plt
-from PIL import Image
-from torchviz import make_dot
-import numpy as np
-
 import torch
 from torchvision import transforms
 from torchvision.utils import save_image
-from transformers import AutoImageProcessor, AutoTokenizer, BertModel, ViTConfig, ViTMAEModel, ViTModel, SwinModel
+from transformers import AutoTokenizer, BertModel, SwinModel
 
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 from dataset import ImagesWithSaliency
-from dataset1 import ImagesWithSaliency1
 
 from model_swin import SalFormer
 
