@@ -20,12 +20,13 @@ from dataset1 import ImagesWithSaliency1
 # from model_vit import SalFormer
 # from model_swin import SalFormer
 # from model_swin_pure import SalFormer
-from model_wo_cross_attn import SalFormer
+# from model_wo_cross_attn import SalFormer
+from ablation_study.model_wo_fuse import SalFormer
+# from model_xception import SalFormer
 
 # from model_vision import SalFormer
 # from model_mask import SalFormer
 # from model_xception import SalFormer
-from TranSalNet_Dense import TranSalNet
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -43,7 +44,7 @@ layout = {
 writer.add_custom_scalars(layout)
 
 device = 'cuda'
-number_epoch = 500
+number_epoch = 200
 eps=1e-10
 batch_size = 32
 
@@ -112,8 +113,8 @@ normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
 # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
-# optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
+# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
 
 # for name, param in model.named_parameters():
 #     if param.requires_grad:
