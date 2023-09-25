@@ -17,31 +17,13 @@ from torch.nn.utils.rnn import pad_sequence
 from dataset import ImagesWithSaliency
 from dataset1 import ImagesWithSaliency1
 
-# from model_vit import SalFormer
-# from model_swin import SalFormer
-# from model_swin_pure import SalFormer
-# from model_wo_cross_attn import SalFormer
-from ablation_study.model_wo_fuse import SalFormer
-# from model_xception import SalFormer
-
-# from model_vision import SalFormer
-# from model_mask import SalFormer
-# from model_xception import SalFormer
+from model_swin import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
 writer = SummaryWriter()
-layout = {
-    "train&vali compare": {
-        "loss": ["Multiline", ["Loss/train", "Loss/test"]],
-        "kl": ["Multiline", ["Loss/train/kl", "Loss/test/kl"]],
-        "cc": ["Multiline", ["Loss/train/cc", "Loss/test/cc"]],
-        "nss": ["Multiline", ["Loss/train/nss", "Loss/test/nss"]],
-    }
-}
-writer.add_custom_scalars(layout)
 
 device = 'cuda'
 number_epoch = 200
@@ -79,15 +61,6 @@ train_set = ImagesWithSaliency("./SalChartQA/train/raw_img/", "./SalChartQA/trai
 val_set = ImagesWithSaliency("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
 test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
 
-# train_set = ImagesWithSaliency1("./SalChartQA/train/raw_img/", "./SalChartQA/train/saliency_all/fix_maps/", "./SalChartQA/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-# val_set = ImagesWithSaliency1("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-# test_set = ImagesWithSaliency1("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-
-# image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
-# image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
-# image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-base-patch4-window12-384")
-# image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
-# vit = ViTMAEModel.from_pretrained("facebook/vit-mae-base")
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # vit = SwinModel.from_pretrained("microsoft/swin-base-patch4-window12-384")
@@ -96,7 +69,6 @@ tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert = BertModel.from_pretrained("bert-base-uncased")
 
 model = SalFormer(vit, bert).to(device)
-# model1 = TranSalNet()
 
 def padding_fn(data):
     img, q, fix, hm, name = zip(*data)
@@ -112,13 +84,7 @@ vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, colla
 normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
-# optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
-optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
-
-# for name, param in model.named_parameters():
-#     if param.requires_grad:
-#         print(name)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
 
 def log_softmax2d(x):
     logits = torch.log_softmax(x.flatten(), 0)
@@ -134,8 +100,6 @@ def inference(img, input_ids, fix, hm):
     fix = fix.to(device)
     hm = hm.to(device)
 
-    # if batch == 0:
-    #     writer.add_graph(model, [img['pixel_values'], input_ids['input_ids']])
     y = model(img, input_ids) 
     y_sum = y.view(y.shape[0], -1).sum(1, keepdim=True)
     y_distribution = y / (y_sum[:, :, None, None] + eps)
@@ -187,7 +151,6 @@ for epoch in range(number_epoch):
         if batch == len(train_dataloader) - 2:
             for i in random.sample(range(0, y.shape[0]), 1):
                 save_image(y[i], f'./results/train/epoch{epoch}_batch{batch}_{i}.png')
-                # plt.imsave(f'./results/train/epoch{epoch}_batch{batch}_{i}.png', y[i, 0, :, :].squeeze().detach().cpu().numpy(), vmin=0.0, vmax=1.0, cmap='gray')
                 save_image(hm[i], f'./results/train/epoch{epoch}_batch{batch}_{i}_truth.png')
 
         writer.add_scalar('Loss/train', loss.item(), n_iter)
@@ -217,7 +180,6 @@ for epoch in range(number_epoch):
                     if y.shape[0] == batch_size:
                         for i in random.sample(range(0, y.shape[0]), 3):
                             save_image(y[i], f'./results/test/epoch{epoch}_batch{batch}_{i}.png')
-                            # plt.imsave(f'./results/test/epoch{epoch}_batch{batch}_{i}.png', y[i, 0, :, :].squeeze().detach().cpu().numpy(), vmin=0.0, vmax=1.0, cmap='gray')
                             save_image(hm[i], f'./results/test/epoch{epoch}_batch{batch}_{i}_truth.png')
                     
                     test_kl += kl.item()/len(vali_dataloader)
@@ -230,6 +192,3 @@ for epoch in range(number_epoch):
             writer.add_scalar('Loss/test/cc', test_cc, epoch)
             writer.add_scalar('Loss/test/nss', test_nss, epoch)
         n_iter += 1
-
-# print("===================")
-# make_dot(y.mean(), params=dict(model.named_parameters())).render("attached", format="png")

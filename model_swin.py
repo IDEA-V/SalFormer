@@ -1,7 +1,4 @@
 import torch
-import math
-from transformers import ViTModel
-from positional_encodings.torch_encodings import PositionalEncoding2D 
 
 class SalFormer(torch.nn.Module):
     def __init__(self, vision_encoder, bert):
@@ -38,10 +35,6 @@ class SalFormer(torch.nn.Module):
 
         self.self_attetion = torch.nn.MultiheadAttention(self.feature_dim, 16, batch_first=True)
 
-        # query = torch.randn(8, 8, self.feature_dim).unsqueeze(0)
-        # pos_encode2d = PositionalEncoding2D(self.feature_dim)
-        # query_2d = pos_encode2d(query)
-        # self.query = torch.nn.Parameter(torch.reshape(query_2d, (1, 64, self.feature_dim)))
         self.text_feature_query = torch.nn.Parameter(torch.randn(10, self.feature_dim).unsqueeze(0)/2)
         self.img_positional_embedding = torch.nn.Parameter(torch.zeros(49, self.feature_dim))
         self.text_positional_embedding = torch.nn.Parameter(torch.zeros(10, self.feature_dim))
@@ -102,9 +95,7 @@ class SalFormer(torch.nn.Module):
         img_features =  self.vit.forward(img, return_dict =True)["last_hidden_state"]
         text_features =  self.bert(**q_inputs)["last_hidden_state"]
         text_features = self.cross_attention.forward(self.text_feature_query.repeat([text_features.shape[0], 1, 1]), text_features, text_features, need_weights=False)[0]
-        # text_features = self.bert_head(text_features)
     
-        # out = self.cross_attention.forward(text_features, img_features, img_features, need_weights=False)[0]
         fused_features = torch.concat((self.vision_head(img_features)+self.img_positional_embedding, self.text_head(text_features)+self.text_positional_embedding), 1)
         att_fused_features = self.self_attetion.forward(fused_features, fused_features, fused_features, need_weights=False)[0]
         fused_features = fused_features + att_fused_features
@@ -112,15 +103,12 @@ class SalFormer(torch.nn.Module):
 
         features = self.cross_attention1.forward(img_features, fused_features, fused_features, need_weights=False)[0]
         features = img_features + features
-        # features = self.cross_attention1.forward(fused_features, img_features, img_features, need_weights=False)[0]
-        # features = fused_features + features
         features = self.ln2(features)
 
         features = self.dense1(features)
         latent_features = self.relu1(features)
 
         latent_features = latent_features.permute(0,2,1)
-        # out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 8, 8))
         out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 7, 7))
         out = self.decoder(out)
 
