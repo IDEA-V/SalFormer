@@ -1,10 +1,10 @@
 import torch
 from torch.utils.data import DataLoader
-# from model_swin import SalFormer
+from model_swin import SalFormer
 # from model_vit import SalFormer
 # from model_swin_pure import SalFormer
 # from model_mask import SalFormer
-from model_wo_fuse import SalFormer
+# from model_wo_fuse import SalFormer
 # from model_wo_cross_attn import SalFormer
 # from model_xception import SalFormer
 
@@ -14,7 +14,9 @@ from transformers import AutoTokenizer, BertModel, SwinModel
 from dataset import ImagesWithSaliency
 from torchvision import transforms
 from torchvision.utils import save_image
-import timm
+
+from pathlib import Path
+
 
 img_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -42,16 +44,25 @@ hm_transform = transforms.Compose([
 device = 'cuda'
 eps=1e-10
 
-test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+
+# dataset_path = './SalChartQA'
+dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
+
+test_set = ImagesWithSaliency(f'{dataset_path}/test/raw_img/', f'{dataset_path}/test/saliency_all/fix_maps/', f'{dataset_path}/test/saliency_all/heatmaps/', img_transform_no_augment, fix_transform, hm_transform)
+
+Path('./eval_results').mkdir(parents=True, exist_ok=True)
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
 
+# Change the model path here
+checkpoint = torch.load('./model.tar')
+# checkpoint = torch.load('./model_wo_fuse.tar')
+
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert = BertModel.from_pretrained("bert-base-uncased")
 model = SalFormer(vit, bert).to(device)
-checkpoint = torch.load('./model_wo_fuse.tar')
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 
@@ -105,3 +116,4 @@ for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
         save_image(y[i], f"./eval_results/{name[i]}")
 
 print("kl:", test_kl, "cc", test_cc, "nss", test_nss)
+

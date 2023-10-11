@@ -9,6 +9,9 @@ from torchvision import transforms
 import numpy as np
 from transformers import AutoImageProcessor
 
+# dataset_path = './SalChartQA'
+dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
+
 class ImagesWithSaliency(Dataset):
     def __init__(self, img_folder, fixation_map_folder, heat_map_folder, img_transforms=None, fix_transform=None, hm_transform=None):
         self.fix_transform = fix_transform
@@ -20,7 +23,7 @@ class ImagesWithSaliency(Dataset):
 
         imgs = os.listdir(img_folder)
         maps = os.listdir(heat_map_folder)
-        qa = json.load(open('./SalChartQA/image_questions.json'))
+        qa = json.load(open(f'{dataset_path}/image_questions.json'))
         for img in imgs:
             id = img.split(".")[0]
             q0 = qa[img]['Q0']

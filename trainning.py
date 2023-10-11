@@ -5,22 +5,21 @@ import torch
 from torchvision import transforms
 from torchvision.utils import save_image
 from transformers import AutoTokenizer, BertModel, SwinModel
-
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 from dataset import ImagesWithSaliency
-
 from model_swin import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 
-import timm
+from pathlib import Path
+
 
 writer = SummaryWriter()
 
 device = 'cuda'
-number_epoch = 200
+number_epoch = 400
 eps=1e-10
 batch_size = 32
 
@@ -51,9 +50,13 @@ hm_transform = transforms.Compose([
 # data_config = timm.data.resolve_model_data_config(vit)
 # img_transform_no_augment = timm.data.create_transform(**data_config, is_training=True)
 
-train_set = ImagesWithSaliency("./SalChartQA/train/raw_img/", "./SalChartQA/train/saliency_all/fix_maps/", "./SalChartQA/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-val_set = ImagesWithSaliency("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+
+# dataset_path = './SalChartQA'
+dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
+
+train_set = ImagesWithSaliency(f"{dataset_path}/train/raw_img/", f"{dataset_path}/train/saliency_all/fix_maps/", f"{dataset_path}/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+val_set = ImagesWithSaliency(f"{dataset_path}/val/raw_img/", f"{dataset_path}/val/saliency_all/fix_maps/", f"{dataset_path}/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+test_set = ImagesWithSaliency(f"{dataset_path}/test/raw_img/", f"{dataset_path}/test/saliency_all/fix_maps/", f"{dataset_path}/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
@@ -63,6 +66,10 @@ tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert = BertModel.from_pretrained("bert-base-uncased")
 
 model = SalFormer(vit, bert).to(device)
+
+Path('./results/train').mkdir(parents=True, exist_ok=True)
+Path('./results/val').mkdir(parents=True, exist_ok=True)
+Path('./results/test').mkdir(parents=True, exist_ok=True)
 
 def padding_fn(data):
     img, q, fix, hm, name = zip(*data)

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+
+eval_results/
+model.tar
+results/
+runs/
