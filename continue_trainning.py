@@ -1,48 +1,25 @@
 import random
 random.seed(666)
 
-import matplotlib.pyplot as plt
-from PIL import Image
-from torchviz import make_dot
-import numpy as np
-
 import torch
 from torchvision import transforms
 from torchvision.utils import save_image
-from transformers import AutoImageProcessor, AutoTokenizer, BertModel, ViTConfig, ViTMAEModel, ViTModel, SwinModel
+from transformers import AutoTokenizer, BertModel, RobertaModel, ViTModel, SwinModel
 
 from torch.utils.data import DataLoader
-from torch.nn.utils.rnn import pad_sequence
 
 from dataset import ImagesWithSaliency
-from dataset1 import ImagesWithSaliency1
 
-# from model_vit import SalFormer
-# from model_swin import SalFormer
-from model_wo_cross_attn import SalFormer
-
-# from model_vision import SalFormer
-# from model_mask import SalFormer
-# from model_xception import SalFormer
-from TranSalNet_Dense import TranSalNet
+from model_swin import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 
 import timm
 
 writer = SummaryWriter()
-layout = {
-    "train&vali compare": {
-        "loss": ["Multiline", ["Loss/train", "Loss/test"]],
-        "kl": ["Multiline", ["Loss/train/kl", "Loss/test/kl"]],
-        "cc": ["Multiline", ["Loss/train/cc", "Loss/test/cc"]],
-        "nss": ["Multiline", ["Loss/train/nss", "Loss/test/nss"]],
-    }
-}
-writer.add_custom_scalars(layout)
 
 device = 'cuda'
-number_epoch = 600
+number_epoch = 300
 eps=1e-10
 batch_size = 32
 
@@ -77,10 +54,6 @@ train_set = ImagesWithSaliency("./SalChartQA/train/raw_img/", "./SalChartQA/trai
 val_set = ImagesWithSaliency("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
 test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
 
-# train_set = ImagesWithSaliency1("./SalChartQA/train/raw_img/", "./SalChartQA/train/saliency_all/fix_maps/", "./SalChartQA/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-# val_set = ImagesWithSaliency1("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-# test_set = ImagesWithSaliency1("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-
 # image_processor = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
 # image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # image_processor = AutoImageProcessor.from_pretrained("microsoft/swin-base-patch4-window12-384")
@@ -90,8 +63,10 @@ test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/s
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # vit = SwinModel.from_pretrained("microsoft/swin-base-patch4-window12-384")
 
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-bert = BertModel.from_pretrained("bert-base-uncased")
+# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# bert = BertModel.from_pretrained("bert-base-uncased")
+bert = RobertaModel.from_pretrained("roberta-base")
 
 model = SalFormer(vit, bert).to(device)
 # model1 = TranSalNet()
@@ -110,13 +85,7 @@ vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, colla
 normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
-# optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
-optimizer =torch.optim.Adam(model.parameters(), lr=0.0001)
-
-# for name, param in model.named_parameters():
-#     if param.requires_grad:
-#         print(name)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
 
 def log_softmax2d(x):
     logits = torch.log_softmax(x.flatten(), 0)
@@ -160,7 +129,7 @@ def inference(img, input_ids, fix, hm):
 
     return y, kl, cc, nss
 
-checkpoint = torch.load('./model.tar')
+checkpoint = torch.load('./model_roberta.tar')
 model.load_state_dict(checkpoint['model_state_dict'])
 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 epoch = checkpoint['epoch']

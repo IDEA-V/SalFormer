@@ -1,16 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
 from model_swin import SalFormer
-# from model_vit import SalFormer
-# from model_swin_pure import SalFormer
-# from model_mask import SalFormer
-# from model_wo_fuse import SalFormer
-# from model_wo_cross_attn import SalFormer
-# from model_xception import SalFormer
 
-from transformers import ViTModel
-
-from transformers import AutoTokenizer, BertModel, SwinModel
+from transformers import AutoTokenizer, BertModel, RobertaModel, ViTModel, SwinModel
 from dataset import ImagesWithSaliency
 from torchvision import transforms
 from torchvision.utils import save_image
@@ -56,13 +48,13 @@ Path('./eval_results').mkdir(parents=True, exist_ok=True)
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
 
-# Change the model path here
-checkpoint = torch.load('./model.tar')
-# checkpoint = torch.load('./model_wo_fuse.tar')
+# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# bert = BertModel.from_pretrained("bert-base-uncased")
+bert = RobertaModel.from_pretrained("roberta-base")
 
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-bert = BertModel.from_pretrained("bert-base-uncased")
 model = SalFormer(vit, bert).to(device)
+checkpoint = torch.load('./model.tar')
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 

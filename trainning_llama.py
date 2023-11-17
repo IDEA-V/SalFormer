@@ -2,26 +2,31 @@ import random
 random.seed(666)
 
 import torch
+from torch.optim import lr_scheduler
 from torchvision import transforms
 from torchvision.utils import save_image
-from transformers import AutoTokenizer, BertModel, SwinModel
+import transformers
+from transformers import AutoTokenizer, BertModel, RobertaModel, ViTModel, SwinModel, CvtModel, LlamaModel, LlamaTokenizer, BloomModel
+
 from torch.utils.data import DataLoader
-from torch.nn.utils.rnn import pad_sequence
 
 from dataset import ImagesWithSaliency
-from model_swin import SalFormer
+
+from model_llama import SalFormer
+# from model_new import SalFormer
+# from ablation_study.model_cvt import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 
-from pathlib import Path
-
+import timm
 
 writer = SummaryWriter()
 
 device = 'cuda'
-number_epoch = 400
-eps=1e-10
+number_epoch = 300
+eps=1e-6
 batch_size = 32
+torch.set_default_dtype(torch.float16)
 
 img_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -50,26 +55,28 @@ hm_transform = transforms.Compose([
 # data_config = timm.data.resolve_model_data_config(vit)
 # img_transform_no_augment = timm.data.create_transform(**data_config, is_training=True)
 
-
-# dataset_path = './SalChartQA'
-dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
-
-train_set = ImagesWithSaliency(f"{dataset_path}/train/raw_img/", f"{dataset_path}/train/saliency_all/fix_maps/", f"{dataset_path}/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-val_set = ImagesWithSaliency(f"{dataset_path}/val/raw_img/", f"{dataset_path}/val/saliency_all/fix_maps/", f"{dataset_path}/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-test_set = ImagesWithSaliency(f"{dataset_path}/test/raw_img/", f"{dataset_path}/test/saliency_all/fix_maps/", f"{dataset_path}/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+train_set = ImagesWithSaliency("./SalChartQA/train/raw_img/", "./SalChartQA/train/saliency_all/fix_maps/", "./SalChartQA/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+val_set = ImagesWithSaliency("./SalChartQA/val/raw_img/", "./SalChartQA/val/saliency_all/fix_maps/", "./SalChartQA/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+test_set = ImagesWithSaliency("./SalChartQA/test/raw_img/", "./SalChartQA/test/saliency_all/fix_maps/", "./SalChartQA/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
+# vit = CvtModel.from_pretrained("microsoft/cvt-13")
 # vit = SwinModel.from_pretrained("microsoft/swin-base-patch4-window12-384")
 
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-bert = BertModel.from_pretrained("bert-base-uncased")
+# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# bert = BertModel.from_pretrained("bert-base-uncased")
+# bert = RobertaModel.from_pretrained("roberta-base")
 
-model = SalFormer(vit, bert).to(device)
+# tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
+# tokenizer.pad_token = tokenizer.eos_token
+# llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", torch_dtype=torch.float16)
 
-Path('./results/train').mkdir(parents=True, exist_ok=True)
-Path('./results/val').mkdir(parents=True, exist_ok=True)
-Path('./results/test').mkdir(parents=True, exist_ok=True)
+tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
+bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
+
+model = SalFormer(vit, bloom).to(device)
 
 def padding_fn(data):
     img, q, fix, hm, name = zip(*data)
@@ -78,14 +85,16 @@ def padding_fn(data):
 
     return torch.stack(img), input_ids, torch.stack(fix), torch.stack(hm)
 
-train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn, num_workers=8)
-vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn, num_workers=8)
+train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
+vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
 
 
 normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
-optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, weight_decay=0.1, momentum=0.9)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
+# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
 
 def log_softmax2d(x):
     logits = torch.log_softmax(x.flatten(), 0)
@@ -131,33 +140,39 @@ n_iter = 0
 n_test_iter = 0
 for epoch in range(number_epoch):
     for batch, (img, input_ids, fix, hm) in enumerate(train_dataloader):
+        optimizer.zero_grad()
 
         y, kl, cc, nss = inference(img, input_ids, fix, hm)
 
         if torch.isnan(kl):
             kl = torch.Tensor([0.0]).to(device)
+            print(max([ p.norm() for p in model.parameters()]))
             print("kl is nan!")
         if torch.isnan(cc):
             cc = torch.Tensor([0.0]).to(device)
+            print(max([ p.norm() for p in model.parameters()]))
             print("cc is nan!")
         if torch.isnan(nss):
             nss = torch.Tensor([0.0]).to(device)
+            print(max([ p.norm() for p in model.parameters()]))
             print("nss is nan!")
         
         loss = 10*kl - cc - 2*nss
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
-        optimizer.zero_grad()
         
         if batch == len(train_dataloader) - 2:
             for i in random.sample(range(0, y.shape[0]), 1):
-                save_image(y[i], f'./results/train/epoch{epoch}_batch{batch}_{i}.png')
-                save_image(hm[i], f'./results/train/epoch{epoch}_batch{batch}_{i}_truth.png')
+                save_image(y[i].type(torch.float32), f'./results/train/epoch{epoch}_batch{batch}_{i}.png')
+                save_image(hm[i].type(torch.float32), f'./results/train/epoch{epoch}_batch{batch}_{i}_truth.png')
 
         writer.add_scalar('Loss/train', loss.item(), n_iter)
         writer.add_scalar('Loss/train/kl', kl.item(), n_iter)
         writer.add_scalar('Loss/train/cc', cc.item(), n_iter)
         writer.add_scalar('Loss/train/nss', nss.item(), n_iter)
+
+        # print(max([ p.norm() for p in model.parameters()]))
 
         if batch == len(train_dataloader)-1:
             print(f"Epoch {epoch}/{number_epoch} batch {batch}: ")
@@ -180,8 +195,8 @@ for epoch in range(number_epoch):
 
                     if y.shape[0] == batch_size:
                         for i in random.sample(range(0, y.shape[0]), 3):
-                            save_image(y[i], f'./results/test/epoch{epoch}_batch{batch}_{i}.png')
-                            save_image(hm[i], f'./results/test/epoch{epoch}_batch{batch}_{i}_truth.png')
+                            save_image(y[i].type(torch.float32), f'./results/test/epoch{epoch}_batch{batch}_{i}.png')
+                            save_image(hm[i].type(torch.float32), f'./results/test/epoch{epoch}_batch{batch}_{i}_truth.png')
                     
                     test_kl += kl.item()/len(vali_dataloader)
                     test_cc += cc.item()/len(vali_dataloader)
@@ -192,4 +207,5 @@ for epoch in range(number_epoch):
             writer.add_scalar('Loss/test/kl', test_kl, epoch)
             writer.add_scalar('Loss/test/cc', test_cc, epoch)
             writer.add_scalar('Loss/test/nss', test_nss, epoch)
+        scheduler.step()
         n_iter += 1
