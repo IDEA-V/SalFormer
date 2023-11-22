@@ -13,20 +13,18 @@ from torch.optim import lr_scheduler
 from torchvision import transforms
 from torchvision.utils import save_image
 from transformers import AutoTokenizer, SwinModel, BloomModel
-
 from torch.utils.data import DataLoader
 
-from dataset import ImagesWithSaliency
+from dataset_new import ImagesWithSaliency
+# from dataset import ImagesWithSaliency
 
 from model_llama import SalFormer
-# from model_new import SalFormer
-# from ablation_study.model_cvt import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 
 writer = SummaryWriter()
 
-device = 'cuda:0'
+device = 'cuda:1'
 number_epoch = 300
 eps=1e-6
 batch_size = 32
@@ -62,9 +60,9 @@ hm_transform = transforms.Compose([
 # dataset_path = './SalChartQA'
 dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
 
-train_set = ImagesWithSaliency(f"{dataset_path}/train/raw_img/", f"{dataset_path}/train/saliency_all/fix_maps/", f"{dataset_path}/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-val_set = ImagesWithSaliency(f"{dataset_path}/val/raw_img/", f"{dataset_path}/val/saliency_all/fix_maps/", f"{dataset_path}/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-test_set = ImagesWithSaliency(f"{dataset_path}/test/raw_img/", f"{dataset_path}/test/saliency_all/fix_maps/", f"{dataset_path}/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+train_set = ImagesWithSaliency("data/train.npy")
+val_set = ImagesWithSaliency("data/val.npy")
+test_set = ImagesWithSaliency("data/test.npy")
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")

@@ -12,14 +12,12 @@ from transformers import BertModel, SwinModel
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
-from dataset import ImagesWithSaliency
+from dataset_new import ImagesWithSaliency
 from model_swin import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 from utils import padding_fn, log_softmax2d, softmax2d, inference
-
 from pathlib import Path
-
 
 writer = SummaryWriter()
 
@@ -59,9 +57,9 @@ hm_transform = transforms.Compose([
 # dataset_path = './SalChartQA'
 dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
 
-train_set = ImagesWithSaliency(f"{dataset_path}/train/raw_img/", f"{dataset_path}/train/saliency_all/fix_maps/", f"{dataset_path}/train/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-val_set = ImagesWithSaliency(f"{dataset_path}/val/raw_img/", f"{dataset_path}/val/saliency_all/fix_maps/", f"{dataset_path}/val/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
-test_set = ImagesWithSaliency(f"{dataset_path}/test/raw_img/", f"{dataset_path}/test/saliency_all/fix_maps/", f"{dataset_path}/test/saliency_all/heatmaps/", img_transform_no_augment, fix_transform, hm_transform)
+train_set = ImagesWithSaliency("data/train.npy")
+val_set = ImagesWithSaliency("data/val.npy")
+test_set = ImagesWithSaliency("data/test.npy")
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")

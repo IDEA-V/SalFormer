@@ -43,7 +43,7 @@ class ImagesWithSaliency(Dataset):
         img = Image.open(f"{self.img_folder}/{img}").convert("RGB")
         fixation = read_image(f"{self.fix_folder}/{fix}")
         hm = read_image(f"{self.heat_map_folder}/{hm}")
-        
+
         if self.img_transform:
             img = self.img_transform(img)
         if self.fix_transform:

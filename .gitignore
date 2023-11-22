@@ -6,11 +6,13 @@ eval_results
 *.zip
 *.tar
 salicon
-*.sh
+
 saved_models
 saved_evals
-dataset1.py
-a.ipynb
+
+*.ipynb
+data/
 ablation_study
 best_models
+results_llm/
 __pycache__
