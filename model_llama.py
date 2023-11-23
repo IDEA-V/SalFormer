@@ -28,7 +28,7 @@ class SalFormer(torch.nn.Module):
         )
 
         self.text_dim_reduce = torch.nn.Sequential(
-            torch.nn.Linear(2560, self.feature_dim),
+            torch.nn.Linear(4096, self.feature_dim),
             torch.nn.GELU()
         )
 

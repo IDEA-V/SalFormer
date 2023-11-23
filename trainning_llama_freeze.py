@@ -2,11 +2,10 @@ import random
 random.seed(666)
 
 import os
-# os.environ['TORCH_HOME'] = '/projects/wang/.cache/torch'
-# os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
+os.environ['TORCH_HOME'] = '/projects/wang/.cache/torch'
+os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
 
 my_variable = os.environ.get('TORCH_HOME')
-print(my_variable)
 
 import torch
 from torch.optim import lr_scheduler
@@ -16,7 +15,6 @@ from transformers import AutoTokenizer, SwinModel, BloomModel, LlamaTokenizer, L
 from torch.utils.data import DataLoader
 
 from dataset_new import ImagesWithSaliency
-# from dataset import ImagesWithSaliency
 
 from model_llama import SalFormer
 
@@ -24,45 +22,20 @@ from torch.utils.tensorboard import SummaryWriter
 
 writer = SummaryWriter()
 
-device = 'cuda'
+device = 'cuda:2'
 number_epoch = 300
 eps=1e-6
 batch_size = 16
-torch.set_default_dtype(torch.float16)
 
-img_transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize((224,224), antialias=True),
-    transforms.Lambda(lambda x: x[:3]),
-    transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400]),
-    transforms.RandomPerspective()
-])
-
-img_transform_no_augment = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize((224,224), antialias=True),
-    transforms.Lambda(lambda x: x[:3]),
-    transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400])
-])
-
-fix_transform = transforms.Compose([
-    transforms.Resize((128,128), antialias=None)
-])
-hm_transform = transforms.Compose([
-    transforms.Resize((128,128), antialias=None),
-    transforms.Lambda(lambda x: x/255)
-])
 
 # vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
 # data_config = timm.data.resolve_model_data_config(vit)
 # img_transform_no_augment = timm.data.create_transform(**data_config, is_training=True)
 
-# dataset_path = './SalChartQA'
-dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
 
-train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float16)
-val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float16)
-test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float16)
+train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float32)
+val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float32)
+test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
@@ -77,7 +50,7 @@ print('SwinModel loaded')
 
 tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
 tokenizer.pad_token = tokenizer.eos_token
-llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", torch_dtype=torch.float16, low_cpu_mem_usage=True)
+llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
 # # llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf")
 print("llama loaded")
 
@@ -86,7 +59,7 @@ print("llama loaded")
 # bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
 # print('BloomModel loaded')
 
-for param in llama.parameters():                
+for param in llama.parameters(): 
     param.requires_grad = False
 
 
@@ -106,17 +79,9 @@ vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, colla
 normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
-optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, weight_decay=0.1, momentum=0.9)
-scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
-# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
-
-def log_softmax2d(x):
-    logits = torch.log_softmax(x.flatten(), 0)
-    return logits.reshape(x.shape)
-
-def softmax2d(x):
-    logits = torch.softmax(x.flatten(), 0)
-    return logits.reshape(x.shape)
+# optimizer = torch.optim.SGD(model.parameters(), lr=0.00001, weight_decay=0.1, momentum=0.9)
+# scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
 
 def inference(img, input_ids, fix, hm):
     img = img.to(device)
@@ -191,12 +156,13 @@ for epoch in range(number_epoch):
         if batch == len(train_dataloader)-1:
             print(f"Epoch {epoch}/{number_epoch} batch {batch}: ")
             print("Training: loss ", loss.item(), "kl ", kl.item(), "cc ", cc.item(), "nss ", nss.item())
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss
-            }, './model.tar')
+            if epoch % 10 == 0:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss
+                }, f'./model_llama_{epoch}.tar')
 
             model.eval()
             test_loss = 0
@@ -221,5 +187,5 @@ for epoch in range(number_epoch):
             writer.add_scalar('Loss/test/kl', test_kl, epoch)
             writer.add_scalar('Loss/test/cc', test_cc, epoch)
             writer.add_scalar('Loss/test/nss', test_nss, epoch)
-        scheduler.step()
+        # scheduler.step()
         n_iter += 1

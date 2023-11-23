@@ -106,13 +106,6 @@ optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, weight_decay=0.1, mom
 scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
 # optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
 
-def log_softmax2d(x):
-    logits = torch.log_softmax(x.flatten(), 0)
-    return logits.reshape(x.shape)
-
-def softmax2d(x):
-    logits = torch.softmax(x.flatten(), 0)
-    return logits.reshape(x.shape)
 
 def inference(img, input_ids, fix, hm):
     img = img.to(device)
@@ -192,7 +185,7 @@ for epoch in range(number_epoch):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': loss
-            }, './model.tar')
+            }, './model_llama.tar')
 
             model.eval()
             test_loss = 0

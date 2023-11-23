@@ -1,37 +1,20 @@
 import torch
 from torch.utils.data import DataLoader
-from model_swin import SalFormer
+
+import os
+os.environ['TORCH_HOME'] = '/projects/wang/.cache/torch'
+os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
 
 from transformers import AutoTokenizer, BertModel, RobertaModel, ViTModel, SwinModel
-from dataset import ImagesWithSaliency
+from model_swin import SalFormer
+# from dataset import ImagesWithSaliency
+from dataset_new import ImagesWithSaliency
 from torchvision import transforms
 from torchvision.utils import save_image
+from utils import padding_fn
 
 from pathlib import Path
 
-
-img_transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize((224,224), antialias=True),
-    transforms.Lambda(lambda x: x[:3]),
-    transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400]),
-    transforms.RandomPerspective()
-])
-
-img_transform_no_augment = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize((224,224), antialias=True),
-    transforms.Lambda(lambda x: x[:3]),
-    transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400])
-])
-
-fix_transform = transforms.Compose([
-    transforms.Resize((128,128), antialias=None)
-])
-hm_transform = transforms.Compose([
-    transforms.Resize((128,128), antialias=None),
-    transforms.Lambda(lambda x: x/255)
-])
 
 device = 'cuda'
 eps=1e-10
@@ -40,7 +23,8 @@ eps=1e-10
 # dataset_path = './SalChartQA'
 dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
 
-test_set = ImagesWithSaliency(f'{dataset_path}/test/raw_img/', f'{dataset_path}/test/saliency_all/fix_maps/', f'{dataset_path}/test/saliency_all/heatmaps/', img_transform_no_augment, fix_transform, hm_transform)
+# test_set = ImagesWithSaliency(f'{dataset_path}/test/raw_img/', f'{dataset_path}/test/saliency_all/fix_maps/', f'{dataset_path}/test/saliency_all/heatmaps/', img_transform_no_augment, fix_transform, hm_transform)
+test_set = ImagesWithSaliency("data/test.npy")
 
 Path('./eval_results').mkdir(parents=True, exist_ok=True)
 
@@ -48,22 +32,16 @@ Path('./eval_results').mkdir(parents=True, exist_ok=True)
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
 
-# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-tokenizer = AutoTokenizer.from_pretrained("roberta-base")
-# bert = BertModel.from_pretrained("bert-base-uncased")
-bert = RobertaModel.from_pretrained("roberta-base")
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+bert = BertModel.from_pretrained("bert-base-uncased")
+# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# bert = RobertaModel.from_pretrained("roberta-base")
 
 model = SalFormer(vit, bert).to(device)
 checkpoint = torch.load('./model.tar')
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 
-def padding_fn(data):
-    img, q, fix, hm, name = zip(*data)
-
-    input_ids = tokenizer(q, return_tensors="pt", padding=True)
-
-    return torch.stack(img), input_ids, torch.stack(fix), torch.stack(hm), name
 
 test_dataloader = DataLoader(test_set, batch_size=32, shuffle=True, collate_fn=padding_fn, num_workers=8)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
