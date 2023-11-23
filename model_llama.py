@@ -98,7 +98,9 @@ class SalFormer(torch.nn.Module):
     def forward(self, img, q_inputs):
 
         img_features =  self.vit.forward(img, return_dict =True)["last_hidden_state"]
-        text_features =  self.bert(**q_inputs)["last_hidden_state"]
+        with torch.no_grad():
+            text_features =  self.bert(**q_inputs)["last_hidden_state"]
+
         text_features = self.text_dim_reduce(text_features)
         text_features = self.cross_attention.forward(self.text_feature_query.repeat([text_features.shape[0], 1, 1]), text_features, text_features, need_weights=False)[0]
     

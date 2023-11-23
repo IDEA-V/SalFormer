@@ -1,5 +1,6 @@
 import random
-random.seed(666)
+random.seed(42)
+import numpy as np
 
 import os
 os.environ['TORCH_HOME'] = '/projects/wang/.cache/torch'
@@ -8,11 +9,11 @@ os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
 my_variable = os.environ.get('TORCH_HOME')
 
 import torch
-from torch.optim import lr_scheduler
 from torchvision import transforms
 from torchvision.utils import save_image
-from transformers import AutoTokenizer, SwinModel, BloomModel, LlamaTokenizer, LlamaModel
+from transformers import SwinModel, BloomModel, LlamaModel
 from torch.utils.data import DataLoader
+from utils import padding_fn, inference
 
 from dataset_new import ImagesWithSaliency
 
@@ -22,7 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 writer = SummaryWriter()
 
-device = 'cuda:2'
+device = 'cuda:1'
 number_epoch = 300
 eps=1e-6
 batch_size = 16
@@ -31,7 +32,6 @@ batch_size = 16
 # vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
 # data_config = timm.data.resolve_model_data_config(vit)
 # img_transform_no_augment = timm.data.create_transform(**data_config, is_training=True)
-
 
 train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float32)
 val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float32)
@@ -43,19 +43,13 @@ vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 # vit = SwinModel.from_pretrained("microsoft/swin-base-patch4-window12-384")
 print('SwinModel loaded')
 
-# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
 # bert = BertModel.from_pretrained("bert-base-uncased")
 # bert = RobertaModel.from_pretrained("roberta-base")
 
-tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
-tokenizer.pad_token = tokenizer.eos_token
 llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
 # # llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf")
 print("llama loaded")
 
-# tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
-# print('tokenizer loaded')
 # bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
 # print('BloomModel loaded')
 
@@ -65,77 +59,36 @@ for param in llama.parameters():
 
 model = SalFormer(vit, llama).to(device)
 
-def padding_fn(data):
-    img, q, fix, hm, name = zip(*data)
-
-    input_ids = tokenizer(q, return_tensors="pt", padding=True)
-
-    return torch.stack(img), input_ids, torch.stack(fix), torch.stack(hm)
-
 train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
 vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
 
+optimizer =torch.optim.Adam(model.parameters(), lr=0.00002, weight_decay=0.0001)
 
-normalize = transforms.Normalize(0, 1)
-kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
-
-# optimizer = torch.optim.SGD(model.parameters(), lr=0.00001, weight_decay=0.1, momentum=0.9)
-# scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
-optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
-
-def inference(img, input_ids, fix, hm):
-    img = img.to(device)
-    input_ids = input_ids.to(device)
-    fix = fix.to(device)
-    hm = hm.to(device)
-
-    y = model(img, input_ids) 
-    y_sum = y.view(y.shape[0], -1).sum(1, keepdim=True)
-    y_distribution = y / (y_sum[:, :, None, None] + eps)
-
-    hm_sum = hm.view(y.shape[0], -1).sum(1, keepdim=True)
-    hm_distribution = hm / (hm_sum[:, :, None, None] + eps)
-    hm_distribution = hm_distribution + eps
-    hm_distribution = hm_distribution / (1+eps)
-
-    if fix.sum() != 0:
-        normal_y = (y-y.mean())/y.std()
-        nss = torch.sum(normal_y*fix)/fix.sum()
-    else:
-        nss = torch.Tensor([0.0]).to(device)
-    kl = kl_loss(torch.log(y_distribution), torch.log(hm_distribution))
-
-    vy = y - torch.mean(y)
-    vhm = hm - torch.mean(hm)  
-
-    if (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2))) != 0:
-        cc = torch.sum(vy * vhm) / (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2)))
-    else: 
-        cc = torch.Tensor([0.0]).to(device)
-
-    return y, kl, cc, nss
 
 n_iter = 0
-n_test_iter = 0
+
 for epoch in range(number_epoch):
-    for batch, (img, input_ids, fix, hm) in enumerate(train_dataloader):
+    for batch, (img, input_ids, fix, hm, name) in enumerate(train_dataloader):
         optimizer.zero_grad()
 
-        y, kl, cc, nss = inference(img, input_ids, fix, hm)
+        y, kl, cc, nss = inference(model, device, eps, img, input_ids, fix, hm)
 
         if torch.isnan(kl):
+            print(np.mean([ p.norm().cpu().detach().numpy() for p in model.parameters()]))
+            print(kl)
             kl = torch.Tensor([0.0]).to(device)
-            print(max([ p.norm() for p in model.parameters()]))
             print("kl is nan!")
         if torch.isnan(cc):
+            print(np.mean([ p.norm().cpu().detach().numpy() for p in model.parameters()]))
+            print(cc)
             cc = torch.Tensor([0.0]).to(device)
-            print(max([ p.norm() for p in model.parameters()]))
             print("cc is nan!")
         if torch.isnan(nss):
+            print(np.mean([ p.norm().cpu().detach().numpy() for p in model.parameters()]))
+            print(nss)
             nss = torch.Tensor([0.0]).to(device)
-            print(max([ p.norm() for p in model.parameters()]))
             print("nss is nan!")
-        
+
         loss = 10*kl - cc - 2*nss
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -151,25 +104,24 @@ for epoch in range(number_epoch):
         writer.add_scalar('Loss/train/cc', cc.item(), n_iter)
         writer.add_scalar('Loss/train/nss', nss.item(), n_iter)
 
-        # print(max([ p.norm() for p in model.parameters()]))
 
         if batch == len(train_dataloader)-1:
             print(f"Epoch {epoch}/{number_epoch} batch {batch}: ")
             print("Training: loss ", loss.item(), "kl ", kl.item(), "cc ", cc.item(), "nss ", nss.item())
-            if epoch % 10 == 0:
+            if epoch % 3 == 0:
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss
-                }, f'./model_llama_{epoch}.tar')
+                }, f'./ckpt/model_llama_{epoch}.tar')
 
             model.eval()
             test_loss = 0
             test_kl, test_cc, test_nss = 0,0,0 
-            for batch, (img, input_ids, fix, hm) in enumerate(vali_dataloader):    
+            for batch, (img, input_ids, fix, hm, name) in enumerate(vali_dataloader):    
                 with torch.no_grad():
-                    y, kl, cc, nss = inference(img, input_ids, fix, hm)
+                    y, kl, cc, nss = inference(model, device, eps, img, input_ids, fix, hm)
                     loss = 10*kl - cc - 2*nss
                     test_loss += loss.item()/len(vali_dataloader)
 

@@ -1,9 +1,14 @@
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, LlamaTokenizer
 
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-print('bert-base-uncased tokenizer loaded')
+
+tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
+tokenizer.pad_token = tokenizer.eos_token
+print('LLAMA tokenizer loaded')
+# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+# print('bert-base-uncased tokenizer loaded')
 # tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
 # print('bloom-3b tokenizer loaded')
 

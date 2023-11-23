@@ -9,6 +9,7 @@ salicon
 
 saved_models
 saved_evals
+ckpt/
 
 *.ipynb
 data/

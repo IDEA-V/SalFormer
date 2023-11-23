@@ -24,9 +24,6 @@ eps=1e-10
 batch_size = 32
 
 
-# dataset_path = './SalChartQA'
-dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
-
 train_set = ImagesWithSaliency("data/train.npy")
 val_set = ImagesWithSaliency("data/val.npy")
 test_set = ImagesWithSaliency("data/test.npy")
@@ -47,13 +44,11 @@ train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, co
 vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn, num_workers=8)
 
 
-# normalize = transforms.Normalize(0, 1)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
 
 
 n_iter = 0
-n_test_iter = 0
 for epoch in range(number_epoch):
     for batch, (img, input_ids, fix, hm, name) in enumerate(train_dataloader):
 
@@ -90,12 +85,14 @@ for epoch in range(number_epoch):
         if batch == len(train_dataloader)-1:
             print(f"Epoch {epoch}/{number_epoch} batch {batch}: ")
             print("Training: loss ", loss.item(), "kl ", kl.item(), "cc ", cc.item(), "nss ", nss.item())
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss
-            }, './model_new.tar')
+            if epoch % 3 == 0:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss
+                }, f'./ckpt/model_new_{epoch}.tar')
+
 
             model.eval()
             test_loss = 0
