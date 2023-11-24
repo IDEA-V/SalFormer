@@ -5,45 +5,38 @@ import os
 os.environ['TORCH_HOME'] = '/projects/wang/.cache/torch'
 os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
 
-from transformers import AutoTokenizer, BertModel, RobertaModel, ViTModel, SwinModel
-from model_swin import SalFormer
-# from dataset import ImagesWithSaliency
+from transformers import SwinModel, LlamaModel, LlamaTokenizer
+from model_llama import SalFormer
 from dataset_new import ImagesWithSaliency
-from torchvision import transforms
 from torchvision.utils import save_image
 from utils import padding_fn
 
 from pathlib import Path
 
-
-device = 'cuda:2'
+device = 'cuda:3'
 eps=1e-10
 
+test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
 
-# dataset_path = './SalChartQA'
-dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
+output_path = './eval_results_llama'
+Path(output_path).mkdir(parents=True, exist_ok=True)
 
-# test_set = ImagesWithSaliency(f'{dataset_path}/test/raw_img/', f'{dataset_path}/test/saliency_all/fix_maps/', f'{dataset_path}/test/saliency_all/heatmaps/', img_transform_no_augment, fix_transform, hm_transform)
-test_set = ImagesWithSaliency("data/test.npy")
-
-Path('./eval_results').mkdir(parents=True, exist_ok=True)
-
-# vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
-# vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
 
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-bert = BertModel.from_pretrained("bert-base-uncased")
-# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
-# bert = RobertaModel.from_pretrained("roberta-base")
+tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
+tokenizer.pad_token = tokenizer.eos_token
+print('LLAMA tokenizer loaded')
+llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
+for param in llama.parameters(): 
+    param.requires_grad = False
 
-model = SalFormer(vit, bert).to(device)
-checkpoint = torch.load('./model_new.tar')
-model.load_state_dict(checkpoint['model_state_dict'])
+
+model = SalFormer(vit, llama).to(device)
+checkpoint = torch.load('./ckpt/model_llama_69.tar')
+model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 model.eval()
 
-
-test_dataloader = DataLoader(test_set, batch_size=16, shuffle=True, collate_fn=padding_fn, num_workers=8)
+test_dataloader = DataLoader(test_set, batch_size=1, shuffle=True, collate_fn=padding_fn, num_workers=1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
 test_kl, test_cc, test_nss = 0,0,0 
@@ -83,7 +76,6 @@ for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
     test_nss += nss.item()/len(test_dataloader)
 
     for i in range(0, y.shape[0]):
-        save_image(y[i], f"./eval_results/{name[i]}")
+        save_image(y[i], f"{output_path}/{name[i]}")
 
 print("kl:", test_kl, "cc", test_cc, "nss", test_nss)
-

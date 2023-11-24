@@ -9,15 +9,13 @@ os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
 my_variable = os.environ.get('TORCH_HOME')
 
 import torch
-from torchvision import transforms
 from torchvision.utils import save_image
 from transformers import SwinModel, BloomModel, LlamaModel
+from model_llama import SalFormer
+from dataset_new import ImagesWithSaliency
 from torch.utils.data import DataLoader
 from utils import padding_fn, inference
 
-from dataset_new import ImagesWithSaliency
-
-from model_llama import SalFormer
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -62,7 +60,7 @@ model = SalFormer(vit, llama).to(device)
 train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
 vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
 
-optimizer =torch.optim.Adam(model.parameters(), lr=0.00002, weight_decay=0.0001)
+optimizer =torch.optim.AdamW(model.parameters(), lr=0.00006, weight_decay=0.001)
 
 
 n_iter = 0
