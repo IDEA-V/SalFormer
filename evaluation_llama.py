@@ -10,10 +10,10 @@ from model_llama import SalFormer
 from dataset_new import ImagesWithSaliency
 from torchvision.utils import save_image
 from utils import padding_fn
-
 from pathlib import Path
+from tqdm import tqdm
 
-device = 'cuda:3'
+device = 'cpu'
 eps=1e-10
 
 test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
@@ -32,13 +32,12 @@ for param in llama.parameters():
 
 
 model = SalFormer(vit, llama).to(device)
-checkpoint = torch.load('./ckpt/model_llama_69.tar')
+checkpoint = torch.load('./ckpt/model_llama_10kl_5cc_2nss_111.tar')
 model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 model.eval()
 
-test_dataloader = DataLoader(test_set, batch_size=1, shuffle=True, collate_fn=padding_fn, num_workers=1)
+test_dataloader = DataLoader(test_set, batch_size=1, shuffle=False, collate_fn=padding_fn, num_workers=1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
-
 test_kl, test_cc, test_nss = 0,0,0 
 for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
     img = img.to(device)
@@ -75,7 +74,7 @@ for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
     test_cc += cc.item()/len(test_dataloader)
     test_nss += nss.item()/len(test_dataloader)
 
-    for i in range(0, y.shape[0]):
+    for i in tqdm(range(0, y.shape[0])):
         save_image(y[i], f"{output_path}/{name[i]}")
 
 print("kl:", test_kl, "cc", test_cc, "nss", test_nss)

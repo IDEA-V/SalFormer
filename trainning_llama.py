@@ -198,8 +198,8 @@ for epoch in range(number_epoch):
 
                     if y.shape[0] == batch_size:
                         for i in random.sample(range(0, y.shape[0]), 3):
-                            save_image(y[i].type(torch.float32), f'./results_llm/test/epoch{epoch}_batch{batch}_{i}.png')
-                            save_image(hm[i].type(torch.float32), f'./results_llm/test/epoch{epoch}_batch{batch}_{i}_truth.png')
+                            save_image(y[i].type(torch.float32), f'./results_llm/val/epoch{epoch}_batch{batch}_{i}.png')
+                            save_image(hm[i].type(torch.float32), f'./results_llm/val/epoch{epoch}_batch{batch}_{i}_truth.png')
 
                     test_kl += kl.item()/len(vali_dataloader)
                     test_cc += cc.item()/len(vali_dataloader)

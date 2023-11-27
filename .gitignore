@@ -3,6 +3,7 @@ save
 runs
 results
 eval_results
+eval_results_llama
 *.zip
 *.tar
 salicon
