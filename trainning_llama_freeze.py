@@ -25,10 +25,12 @@ def trainning_llama(device, KL, CC, NSS, LR):
     eps=1e-6
     batch_size = 16
 
-    train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float32)
-    val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float32)
-    train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
-    vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, collate_fn=padding_fn)
+device = 'cuda'
+number_epoch = 300
+eps=1e-6
+batch_size = 16
+# torch.set_default_dtype(torch.float16)
+torch.autograd.set_detect_anomaly(True)
 
     vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
     print('SwinModel loaded')
@@ -38,12 +40,54 @@ def trainning_llama(device, KL, CC, NSS, LR):
     # bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
     # print('BloomModel loaded')
 
-    for param in llama.parameters(): 
-        param.requires_grad = False
+fix_transform = transforms.Compose([
+    transforms.Resize((128,128), antialias=None)
+])
+hm_transform = transforms.Compose([
+    transforms.Resize((128,128), antialias=None),
+    transforms.Lambda(lambda x: x/255)
+])
+
+# vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
+# data_config = timm.data.resolve_model_data_config(vit)
+# img_transform_no_augment = timm.data.create_transform(**data_config, is_training=True)
+
+# dataset_path = './SalChartQA'
+dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
+
+# train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float16)
+# val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float16)
+# test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float16)
+train_set = ImagesWithSaliency("data/train.npy")
+val_set = ImagesWithSaliency("data/val.npy")
+test_set = ImagesWithSaliency("data/test.npy")
+
+# vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
+vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
+# vit = CvtModel.from_pretrained("microsoft/cvt-13")
+# vit = SwinModel.from_pretrained("microsoft/swin-base-patch4-window12-384")
+print('SwinModel loaded')
+
+# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# bert = BertModel.from_pretrained("bert-base-uncased")
+# bert = RobertaModel.from_pretrained("roberta-base")
+
+# tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
+# tokenizer.pad_token = tokenizer.eos_token
+# llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", torch_dtype=torch.float16, low_cpu_mem_usage=True)
+# print("llama loaded")
+
+tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
+print('tokenizer loaded')
+bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
+print('BloomModel loaded')
+
+for param in bloom.parameters():                
+    param.requires_grad = False
 
 
-    model = SalFormer(vit, llama).to(device)
-    optimizer =torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.001)
+model = SalFormer(vit, bloom).to(device)
 
     n_iter = 0
 
@@ -96,14 +140,11 @@ def trainning_llama(device, KL, CC, NSS, LR):
                         'loss': loss
                     }, f'./ckpt/model_llama_{KL}kl_{CC}cc_{NSS}nss_{epoch}.tar')
 
-                model.eval()
-                test_loss = 0
-                test_kl, test_cc, test_nss = 0,0,0 
-                for batch, (img, input_ids, fix, hm, name) in enumerate(vali_dataloader):    
-                    with torch.no_grad():
-                        y, kl, cc, nss = inference(model, device, eps, img, input_ids, fix, hm)
-                        loss = KL*kl - CC*cc - NSS*nss
-                        test_loss += loss.item()/len(vali_dataloader)
+# optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=0.1, momentum=0.9)
+# scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
+# optimizer =torch.optim.Adam(model.parameters(), lr=0.00005, eps=eps)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
+
 
                         if y.shape[0] == batch_size:
                             for i in random.sample(range(0, y.shape[0]), 3):
@@ -122,13 +163,103 @@ def trainning_llama(device, KL, CC, NSS, LR):
             n_iter += 1
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--device", type=str, default='cuda')
-    parser.add_argument("--kl", type=int, default=10)
-    parser.add_argument("--cc", type=int, default=5)
-    parser.add_argument("--nss", type=int, default=2)
-    parser.add_argument("--lr", type=float, default=0.00006)
-    args = vars(parser.parse_args())
+    y = model(img, input_ids)
+    y_sum = y.view(y.shape[0], -1).sum(1, keepdim=True)
+    y_distribution = y / (y_sum[:, :, None, None] + eps)
 
-    trainning_llama(device = args['device'], KL = args['kl'], CC = args['cc'], NSS = args['nss'], LR= args['lr'])
+    hm_sum = hm.view(y.shape[0], -1).sum(1, keepdim=True)
+    hm_distribution = hm / (hm_sum[:, :, None, None] + eps)
+    hm_distribution = hm_distribution + eps
+    hm_distribution = hm_distribution / (1+eps)
+
+    if fix.sum() != 0:
+        normal_y = (y-y.mean())/y.std()
+        nss = torch.sum(normal_y*fix)/fix.sum()
+    else:
+        nss = torch.Tensor([0.0]).to(device)
+    kl = kl_loss(torch.log(y_distribution), torch.log(hm_distribution))
+
+    vy = y - torch.mean(y)
+    vhm = hm - torch.mean(hm)  
+
+    if (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2))) != 0:
+        cc = torch.sum(vy * vhm) / (torch.sqrt(torch.sum(vy ** 2)) * torch.sqrt(torch.sum(vhm ** 2)))
+    else: 
+        cc = torch.Tensor([0.0]).to(device)
+
+    return y, kl, cc, nss
+
+n_iter = 0
+n_test_iter = 0
+for epoch in range(number_epoch):
+    for batch, (img, input_ids, fix, hm) in enumerate(train_dataloader):
+        optimizer.zero_grad()
+
+        y, kl, cc, nss = inference(img, input_ids, fix, hm)
+        if torch.isnan(kl):
+            kl = torch.Tensor([0.0]).to(device)
+            print(max([ p.norm() for p in model.parameters()]))
+            print("kl is nan!")
+        if torch.isnan(cc):
+            cc = torch.Tensor([0.0]).to(device)
+            print(max([ p.norm() for p in model.parameters()]))
+            print("cc is nan!")
+        if torch.isnan(nss):
+            nss = torch.Tensor([0.0]).to(device)
+            print(max([ p.norm() for p in model.parameters()]))
+            print("nss is nan!")
+        
+        loss = 10*kl - cc - 2*nss
+        loss.backward()
+        # print("loss: ", loss, "lr: ", optimizer.param_groups[0]["lr"])
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+
+        if batch == len(train_dataloader) - 2:
+            for i in random.sample(range(0, y.shape[0]), 1):
+                save_image(y[i].type(torch.float32), f'./results_llm/train/epoch{epoch}_batch{batch}_{i}.png')
+                save_image(hm[i].type(torch.float32), f'./results_llm/train/epoch{epoch}_batch{batch}_{i}_truth.png')
+
+        writer.add_scalar('Loss/train', loss.item(), n_iter)
+        writer.add_scalar('Loss/train/kl', kl.item(), n_iter)
+        writer.add_scalar('Loss/train/cc', cc.item(), n_iter)
+        writer.add_scalar('Loss/train/nss', nss.item(), n_iter)
+
+        if batch == len(train_dataloader)-1:
+            print(f"Epoch {epoch}/{number_epoch} batch {batch}: ")
+            print("Training: loss ", loss.item(), "kl ", kl.item(), "cc ", cc.item(), "nss ", nss.item())
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss
+            }, './model.tar')
+
+            model.eval()
+            test_loss = 0
+            test_kl, test_cc, test_nss = 0,0,0 
+            for batch, (img, input_ids, fix, hm) in enumerate(vali_dataloader):    
+                with torch.no_grad():
+                    y, kl, cc, nss = inference(img, input_ids, fix, hm)
+                    loss = 10*kl - cc - 2*nss
+                    test_loss += loss.item()/len(vali_dataloader)
+
+                    if y.shape[0] == batch_size:
+                        for i in random.sample(range(0, y.shape[0]), 3):
+                            save_image(y[i].type(torch.float32), f'./results_llm/test/epoch{epoch}_batch{batch}_{i}.png')
+                            save_image(hm[i].type(torch.float32), f'./results_llm/test/epoch{epoch}_batch{batch}_{i}_truth.png')
+
+                    test_kl += kl.item()/len(vali_dataloader)
+                    test_cc += cc.item()/len(vali_dataloader)
+                    test_nss += nss.item()/len(vali_dataloader)
+            model.train(True)
+            print("Testing: loss ", test_loss, "kl ", test_kl, "cc ", test_cc, "nss ", test_nss)
+            writer.add_scalar('Loss/test', test_loss, epoch)
+            writer.add_scalar('Loss/test/kl', test_kl, epoch)
+            writer.add_scalar('Loss/test/cc', test_cc, epoch)
+            writer.add_scalar('Loss/test/nss', test_nss, epoch)
+        # scheduler.step()
+        n_iter += 1
+    
+    norms = [p.norm() for p in model.parameters()]
+    print(sum(norms)/len(norms)) 

@@ -14,7 +14,8 @@ ckpt/
 
 *.ipynb
 data/
-ablation_study
+# ablation_study
 best_models
 results_llm/
 __pycache__
+.gitignore

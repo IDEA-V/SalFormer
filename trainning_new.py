@@ -23,6 +23,35 @@ number_epoch = 200
 eps=1e-10
 batch_size = 32
 
+img_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Resize((224,224), antialias=True),
+    transforms.Lambda(lambda x: x[:3]),
+    transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400]),
+    transforms.RandomPerspective()
+])
+
+img_transform_no_augment = transforms.Compose([
+    transforms.Resize((224,224), antialias=True),
+    transforms.Lambda(lambda x: x[:3]),
+    transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400])
+])
+
+fix_transform = transforms.Compose([
+    transforms.Resize((128,128), antialias=None)
+])
+hm_transform = transforms.Compose([
+    transforms.Resize((128,128), antialias=None),
+    transforms.Lambda(lambda x: x/255)
+])
+
+# vit = timm.create_model('xception41p.ra3_in1k', pretrained=True)
+# data_config = timm.data.resolve_model_data_config(vit)
+# img_transform_no_augment = timm.data.create_transform(**data_config, is_training=True)
+
+
+# dataset_path = './SalChartQA'
+dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
 
 train_set = ImagesWithSaliency("data/train.npy")
 val_set = ImagesWithSaliency("data/val.npy")
