@@ -35,7 +35,6 @@ img_transform = transforms.Compose([
 ])
 
 img_transform_no_augment = transforms.Compose([
-    transforms.ToTensor(),
     transforms.Resize((224,224), antialias=True),
     transforms.Lambda(lambda x: x[:3]),
     transforms.Normalize([0.8801, 0.8827, 0.8840], [0.2523, 0.2321, 0.2400])

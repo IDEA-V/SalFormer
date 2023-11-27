@@ -28,7 +28,8 @@ device = 'cuda'
 number_epoch = 300
 eps=1e-6
 batch_size = 16
-torch.set_default_dtype(torch.float16)
+# torch.set_default_dtype(torch.float16)
+torch.autograd.set_detect_anomaly(True)
 
 img_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -60,9 +61,12 @@ hm_transform = transforms.Compose([
 # dataset_path = './SalChartQA'
 dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
 
-train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float16)
-val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float16)
-test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float16)
+# train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float16)
+# val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float16)
+# test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float16)
+train_set = ImagesWithSaliency("data/train.npy")
+val_set = ImagesWithSaliency("data/val.npy")
+test_set = ImagesWithSaliency("data/test.npy")
 
 # vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
@@ -75,22 +79,21 @@ print('SwinModel loaded')
 # bert = BertModel.from_pretrained("bert-base-uncased")
 # bert = RobertaModel.from_pretrained("roberta-base")
 
-tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
-tokenizer.pad_token = tokenizer.eos_token
-llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", torch_dtype=torch.float16, low_cpu_mem_usage=True)
-# # llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf")
-print("llama loaded")
+# tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
+# tokenizer.pad_token = tokenizer.eos_token
+# llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", torch_dtype=torch.float16, low_cpu_mem_usage=True)
+# print("llama loaded")
 
-# tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
-# print('tokenizer loaded')
-# bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
-# print('BloomModel loaded')
+tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
+print('tokenizer loaded')
+bloom = BloomModel.from_pretrained("bigscience/bloom-3b")
+print('BloomModel loaded')
 
-for param in llama.parameters():                
+for param in bloom.parameters():                
     param.requires_grad = False
 
 
-model = SalFormer(vit, llama).to(device)
+model = SalFormer(vit, bloom).to(device)
 
 def padding_fn(data):
     img, q, fix, hm, name = zip(*data)
@@ -106,9 +109,11 @@ vali_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, colla
 normalize = transforms.Normalize(0, 1)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
-optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, weight_decay=0.1, momentum=0.9)
-scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
-# optimizer =torch.optim.Adam(model.parameters(), lr=0.00006, weight_decay=0.0001)
+# optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=0.1, momentum=0.9)
+# scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.6)
+# optimizer =torch.optim.Adam(model.parameters(), lr=0.00005, eps=eps)
+optimizer =torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
+
 
 def log_softmax2d(x):
     logits = torch.log_softmax(x.flatten(), 0)
@@ -124,7 +129,7 @@ def inference(img, input_ids, fix, hm):
     fix = fix.to(device)
     hm = hm.to(device)
 
-    y = model(img, input_ids) 
+    y = model(img, input_ids)
     y_sum = y.view(y.shape[0], -1).sum(1, keepdim=True)
     y_distribution = y / (y_sum[:, :, None, None] + eps)
 
@@ -157,7 +162,6 @@ for epoch in range(number_epoch):
         optimizer.zero_grad()
 
         y, kl, cc, nss = inference(img, input_ids, fix, hm)
-
         if torch.isnan(kl):
             kl = torch.Tensor([0.0]).to(device)
             print(max([ p.norm() for p in model.parameters()]))
@@ -173,6 +177,7 @@ for epoch in range(number_epoch):
         
         loss = 10*kl - cc - 2*nss
         loss.backward()
+        # print("loss: ", loss, "lr: ", optimizer.param_groups[0]["lr"])
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
@@ -185,8 +190,6 @@ for epoch in range(number_epoch):
         writer.add_scalar('Loss/train/kl', kl.item(), n_iter)
         writer.add_scalar('Loss/train/cc', cc.item(), n_iter)
         writer.add_scalar('Loss/train/nss', nss.item(), n_iter)
-
-        # print(max([ p.norm() for p in model.parameters()]))
 
         if batch == len(train_dataloader)-1:
             print(f"Epoch {epoch}/{number_epoch} batch {batch}: ")
@@ -221,5 +224,8 @@ for epoch in range(number_epoch):
             writer.add_scalar('Loss/test/kl', test_kl, epoch)
             writer.add_scalar('Loss/test/cc', test_cc, epoch)
             writer.add_scalar('Loss/test/nss', test_nss, epoch)
-        scheduler.step()
+        # scheduler.step()
         n_iter += 1
+    
+    norms = [p.norm() for p in model.parameters()]
+    print(sum(norms)/len(norms)) 
