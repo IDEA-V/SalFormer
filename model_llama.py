@@ -1,7 +1,7 @@
 import torch
 
 class SalFormer(torch.nn.Module):
-    def __init__(self, vision_encoder, bert):
+    def __init__(self, vision_encoder, bert, neuron_n = 4096):
         """
         In the constructor we instantiate four parameters and assign them as
         member parameters.
@@ -30,9 +30,8 @@ class SalFormer(torch.nn.Module):
         )
 
         self.text_dim_reduce = torch.nn.Sequential(
-            torch.nn.Linear(2560, self.feature_dim),
-            torch.nn.GELU(),
-            torch.nn.LayerNorm(self.feature_dim)
+            torch.nn.Linear(neuron_n, self.feature_dim),
+            torch.nn.GELU()
         )
 
         self.cross_attention = torch.nn.MultiheadAttention(self.feature_dim, 16, kdim=self.feature_dim, vdim=self.feature_dim, batch_first=True)

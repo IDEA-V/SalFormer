@@ -11,19 +11,14 @@ from model_swin import SalFormer
 from dataset_new import ImagesWithSaliency
 from torchvision import transforms
 from torchvision.utils import save_image
-from utils import padding_fn
+from tokenizer_bert import padding_fn
 
 from pathlib import Path
 
 
-device = 'cuda:2'
+device = 'cuda:3'
 eps=1e-10
 
-
-# dataset_path = './SalChartQA'
-dataset_path = '/datasets/internal/datasets_wang/SalChartQA/SalChartQA-split'
-
-# test_set = ImagesWithSaliency(f'{dataset_path}/test/raw_img/', f'{dataset_path}/test/saliency_all/fix_maps/', f'{dataset_path}/test/saliency_all/heatmaps/', img_transform_no_augment, fix_transform, hm_transform)
 test_set = ImagesWithSaliency("data/test.npy")
 
 Path('./eval_results').mkdir(parents=True, exist_ok=True)
@@ -38,7 +33,7 @@ bert = BertModel.from_pretrained("bert-base-uncased")
 # bert = RobertaModel.from_pretrained("roberta-base")
 
 model = SalFormer(vit, bert).to(device)
-checkpoint = torch.load('./model_new.tar')
+checkpoint = torch.load('./ckpt/model_bert_10kl_1cc_2nss_174.tar')
 model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 
@@ -86,4 +81,3 @@ for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
         save_image(y[i], f"./eval_results/{name[i]}")
 
 print("kl:", test_kl, "cc", test_cc, "nss", test_nss)
-

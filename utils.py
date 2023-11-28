@@ -1,23 +1,7 @@
 import torch
-from transformers import AutoTokenizer, LlamaTokenizer
 
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 
-tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
-tokenizer.pad_token = tokenizer.eos_token
-print('LLAMA tokenizer loaded')
-# tokenizer = AutoTokenizer.from_pretrained("roberta-base")
-# tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-# print('bert-base-uncased tokenizer loaded')
-# tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-3b")
-# print('bloom-3b tokenizer loaded')
-
-def padding_fn(data):
-    img, q, fix, hm, name = zip(*data)
-
-    input_ids = tokenizer(q, return_tensors="pt", padding=True)
-
-    return torch.stack(img), input_ids, torch.stack(fix), torch.stack(hm), name
 
 def log_softmax2d(x):
     logits = torch.log_softmax(x.flatten(), 0)
