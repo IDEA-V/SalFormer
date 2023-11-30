@@ -1,11 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
+from env import *
 
-import os
-os.environ['TORCH_HOME'] = '/projects/wang/.cache/torch'
-os.environ['TRANSFORMERS_CACHE'] = '/projects/wang/.cache'
-
-from transformers import SwinModel, LlamaModel, LlamaTokenizer
+from transformers import SwinModel, LlamaModel
 from model_llama import SalFormer
 from dataset_new import ImagesWithSaliency
 from torchvision.utils import save_image
@@ -18,14 +15,11 @@ eps=1e-10
 
 test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
 
-output_path = './eval_results_llama'
+output_path = './eval_results'
 Path(output_path).mkdir(parents=True, exist_ok=True)
 
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 
-tokenizer = LlamaTokenizer.from_pretrained("Enoch/llama-7b-hf")
-tokenizer.pad_token = tokenizer.eos_token
-print('LLAMA tokenizer loaded')
 llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
 for param in llama.parameters(): 
     param.requires_grad = False
