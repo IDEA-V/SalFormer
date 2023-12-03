@@ -15,8 +15,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
     writer = SummaryWriter(comment=f"Model_freeze_{Model}_KL_{KL}_CC_{CC}_NSS_{NSS}")
-    number_epoch = 200
-    eps=1e-6
+    number_epoch = 250
+    eps=1e-8
 
     if Model == 'llama':
         from model_llama import SalFormer
@@ -59,7 +59,7 @@ def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
     else:
         model = SalFormer(vit, llm, neuron_n = neuron_n).to(device)
 
-    optimizer =torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.001)
+    optimizer =torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.0001)
 
     n_iter = 0
     cc_init = 0
@@ -115,10 +115,10 @@ def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
                         loss = KL*kl - CC*cc - NSS*nss
                         test_loss += loss.item()/len(vali_dataloader)
 
-                        if y.shape[0] == batch_size:
-                            for i in random.sample(range(0, y.shape[0]), 3):
-                                save_image(y[i].type(torch.float32), f'./results_llm/val/epoch{epoch}_batch{batch}_{i}.png')
-                                save_image(hm[i].type(torch.float32), f'./results_llm/val/epoch{epoch}_batch{batch}_{i}_truth.png')
+                        # if y.shape[0] == batch_size:
+                        #     for i in random.sample(range(0, y.shape[0]), 3):
+                        #         save_image(y[i].type(torch.float32), f'./results_llm/val/epoch{epoch}_batch{batch}_{i}.png')
+                        #         save_image(hm[i].type(torch.float32), f'./results_llm/val/epoch{epoch}_batch{batch}_{i}_truth.png')
 
                         test_kl += kl.item()/len(vali_dataloader)
                         test_cc += cc.item()/len(vali_dataloader)

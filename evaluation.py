@@ -11,7 +11,7 @@ from tokenizer_bert import padding_fn
 from pathlib import Path
 
 
-device = 'cuda:3'
+device = 'cuda:5'
 eps=1e-10
 
 test_set = ImagesWithSaliency("data/test.npy")

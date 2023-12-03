@@ -26,7 +26,7 @@ for param in llama.parameters():
 
 
 model = SalFormer(vit, llama).to(device)
-checkpoint = torch.load('./ckpt/model_llama_10kl_5cc_2nss_144.tar')
+checkpoint = torch.load('./ckpt/model_llama_freeze_10kl_5cc_2nss.tar')
 model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 model.eval()
 

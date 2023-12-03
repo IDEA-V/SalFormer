@@ -17,16 +17,13 @@ test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
 
 output_path = './eval_results'
 Path(output_path).mkdir(parents=True, exist_ok=True)
-neuron_n = 2560
 
 vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
 
 llm = BloomModel.from_pretrained("bigscience/bloom-3b")
-for param in llm.parameters(): 
-    param.requires_grad = False
 
 
-model = SalFormer(vit, llm, neuron_n=neuron_n).to(device)
+model = SalFormer(vit, llm, neuron_n=2560).to(device)
 checkpoint = torch.load('./ckpt/model_bloom_freeze_10kl_5cc_2nss.tar')
 model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 model.eval()

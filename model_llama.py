@@ -7,8 +7,8 @@ class SalFormer(torch.nn.Module):
         member parameters.
         """
         super().__init__()
-        
-        
+
+
         self.vit = vision_encoder
         self.feature_dim = 768
         self.bert = bert
@@ -103,7 +103,7 @@ class SalFormer(torch.nn.Module):
 
         img_features =  self.vit.forward(img, return_dict =True)["last_hidden_state"]
         text_features =  self.bert(**q_inputs)["last_hidden_state"]
-        text_features = self.ln0(text_features)
+        #text_features = self.ln0(text_features)
         # print("11", text_features.norm())
         text_features = self.text_dim_reduce(text_features)
         # print("22", text_features.norm())
