@@ -10,7 +10,8 @@ from tokenizer_llama import padding_fn
 from pathlib import Path
 from tqdm import tqdm
 
-device = 'cpu'
+device = torch.device('cuda:0')
+#'cuda:4'
 eps=1e-10
 
 test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
@@ -18,19 +19,17 @@ test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)
 output_path = './eval_results'
 Path(output_path).mkdir(parents=True, exist_ok=True)
 
-vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
+vit = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224", low_cpu_mem_usage=True)
 
-llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
-for param in llama.parameters(): 
-    param.requires_grad = False
-
+# llama = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
+llama = LlamaModel.from_pretrained("daryl149/Llama-2-7b-chat-hf", low_cpu_mem_usage=True)
 
 model = SalFormer(vit, llama).to(device)
-checkpoint = torch.load('./ckpt/model_llama_freeze_10kl_5cc_2nss.tar')
+checkpoint = torch.load('./ckpt/model_llama_10kl_5cc_2nss.tar')
 model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 model.eval()
 
-test_dataloader = DataLoader(test_set, batch_size=16, shuffle=False, collate_fn=padding_fn, num_workers=4)
+test_dataloader = DataLoader(test_set, batch_size=4, shuffle=False, collate_fn=padding_fn, num_workers=4)
 kl_loss = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
 test_kl, test_cc, test_nss = 0,0,0 
 for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
@@ -40,7 +39,6 @@ for batch, (img, input_ids, fix, hm, name) in enumerate(test_dataloader):
     hm = hm.to(device)
 
     y = model(img, input_ids)
-    
     y_sum = y.view(y.shape[0], -1).sum(1, keepdim=True)
     y_distribution = y / (y_sum[:, :, None, None] + eps)
 

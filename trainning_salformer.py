@@ -14,7 +14,7 @@ from utils import inference
 from torch.utils.tensorboard import SummaryWriter
 
 def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
-    writer = SummaryWriter(comment=f"Model_freeze_{Model}_KL_{KL}_CC_{CC}_NSS_{NSS}")
+    writer = SummaryWriter(comment=f"Model_{Model}_KL_{KL}_CC_{CC}_NSS_{NSS}")
     number_epoch = 250
     eps=1e-8
 
@@ -22,7 +22,8 @@ def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
         from model_llama import SalFormer
         from transformers import LlamaModel
         from tokenizer_llama import padding_fn
-        llm = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
+        # llm = LlamaModel.from_pretrained("Enoch/llama-7b-hf", low_cpu_mem_usage=True)
+        llm = LlamaModel.from_pretrained("daryl149/Llama-2-7b-chat-hf", low_cpu_mem_usage=True)
         neuron_n = 4096
         print("llama loaded")
     elif Model == 'bloom':
@@ -42,9 +43,9 @@ def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
         print('model not available, possiblilities: llama, bloom, bert')
         return
 
-    # if not Model == 'bert':
-    for param in llm.parameters(): 
-        param.requires_grad = False
+    if not Model == 'bert':
+        for param in llm.parameters(): 
+            param.requires_grad = False
 
     train_set = ImagesWithSaliency("data/train.npy", dtype=torch.float32)
     val_set = ImagesWithSaliency("data/val.npy", dtype=torch.float32)
@@ -131,7 +132,7 @@ def trainning_salformer(Model, device, batch_size, KL, CC, NSS, LR):
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'loss': loss
-                    }, f'./ckpt/model_{Model}_freeze_{KL}kl_{CC}cc_{NSS}nss.tar')
+                    }, f'./ckpt/model_{Model}_{KL}kl_{CC}cc_{NSS}nss.tar')
 
                 model.train(True)
                 print("Testing: loss ", test_loss, "kl ", test_kl, "cc ", test_cc, "nss ", test_nss)
