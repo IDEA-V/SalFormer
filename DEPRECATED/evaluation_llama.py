@@ -11,7 +11,6 @@ from pathlib import Path
 from tqdm import tqdm
 
 device = torch.device('cuda:0')
-#'cuda:4'
 eps=1e-10
 
 test_set = ImagesWithSaliency("data/test.npy", dtype=torch.float32)

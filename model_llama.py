@@ -104,30 +104,21 @@ class SalFormer(torch.nn.Module):
         img_features =  self.vit.forward(img, return_dict =True)["last_hidden_state"]
         text_features =  self.bert(**q_inputs)["last_hidden_state"]
         #text_features = self.ln0(text_features)
-        # print("11", text_features.norm())
         text_features = self.text_dim_reduce(text_features)
-        # print("22", text_features.norm())
         text_features = self.cross_attention.forward(self.text_feature_query.repeat([text_features.shape[0], 1, 1]), text_features, text_features, need_weights=False)[0]
         text_features = self.ln00(text_features)
-        # print("33", text_features.norm())
 
         fused_features = torch.concat((self.vision_head(img_features)+self.img_positional_embedding, self.text_head(text_features)+self.text_positional_embedding), 1)
         att_fused_features = self.self_attetion.forward(fused_features, fused_features, fused_features, need_weights=False)[0]
         fused_features = fused_features + att_fused_features
         fused_features = self.ln1(fused_features)
 
-        # print("44", fused_features.norm())
-
         features = self.cross_attention1.forward(img_features, fused_features, fused_features, need_weights=False)[0]
         features = img_features + features
         features = self.ln2(features)
 
-        # print("55", features.norm())
-
         features = self.dense1(features)
         latent_features = self.relu1(features)
-
-        # print("66", latent_features.norm())
 
         latent_features = latent_features.permute(0,2,1)
         out = torch.reshape(latent_features, (features.shape[0], self.feature_dim, 7, 7))

@@ -7,12 +7,11 @@ class SalFormer(torch.nn.Module):
         member parameters.
         """
         super().__init__()
-        
-        
+
         self.vit = vision_encoder
         self.feature_dim = 768
         self.bert = bert
-        
+
         self.vision_head = torch.nn.Sequential(
             torch.nn.Linear(self.feature_dim, self.feature_dim),
             torch.nn.GELU(),
@@ -95,8 +94,9 @@ class SalFormer(torch.nn.Module):
         img_features =  self.vit.forward(img, return_dict =True)["last_hidden_state"]
         with torch.no_grad():
             text_features =  self.bert(**q_inputs)["last_hidden_state"]
+            # text_features =  torch.unsqueeze(bert_output["last_hidden_state"][:,0,:], 1)
         text_features = self.cross_attention.forward(self.text_feature_query.repeat([text_features.shape[0], 1, 1]), text_features, text_features, need_weights=False)[0]
-    
+
         fused_features = torch.concat((self.vision_head(img_features)+self.img_positional_embedding, self.text_head(text_features)+self.text_positional_embedding), 1)
         att_fused_features = self.self_attetion.forward(fused_features, fused_features, fused_features, need_weights=False)[0]
         fused_features = fused_features + att_fused_features
@@ -114,4 +114,3 @@ class SalFormer(torch.nn.Module):
         out = self.decoder(out)
 
         return out
-        
