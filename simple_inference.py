@@ -40,6 +40,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--img_path", type=str, default="/netpool/homes/wangyo/Projects/chi2025_scanpath/evaluation/images/economist_daily_chart_85.png")
     parser.add_argument("--query", type=str, default="type your query")
+    parser.add_argument("--type", type=str, default="A")
     args = vars(parser.parse_args())
     print(args["query"])
 
@@ -48,8 +49,8 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained("google-bert/bert-base-uncased")
     bert = BertModel.from_pretrained("bert-base-uncased")
     model = SalFormer(vit, bert).to(DEVICE)
-    checkpoint = torch.load('./model/model_lr6e-5_wd1e-4.tar')
+    checkpoint = torch.load('/netpool/homes/wangyo/Projects/vega_editor_backend/model/model_lr6e-5_wd1e-4.tar')
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     predictions = predict(args['query'], args['img_path'])
-    np.save(f'predictions/{args["img_path"].split("/")[-1].strip(".png")}_{args["query"][:10]}.npy', predictions[0]/255.)
+    np.save(f'predictions/{args["img_path"].split("/")[-1].strip(".png")}_{args["type"]}.npy', predictions[0]/255.)
